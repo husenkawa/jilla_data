@@ -25,15 +25,25 @@
 </head>
 <body class="dashboard-bg min-h-screen flex flex-col justify-between p-4 md:p-8 relative select-none">
   
-  <!-- Top Close Button -->
-  <div class="absolute top-4 right-4 z-10">
+  <!-- Top Close Button & Live DateTime Display -->
+  <div class="flex justify-between items-center w-full z-10 px-2">
+    <!-- Live Date, Day & Time Widget -->
+    <div class="bg-white/90 px-4 py-1.5 rounded-lg shadow-md border border-gray-200 text-gray-800 font-bold text-sm flex items-center gap-3">
+      <span id="current-day">ڕۆژ</span>
+      <span class="text-gray-400">|</span>
+      <span id="current-date">بەروار</span>
+      <span class="text-gray-400">|</span>
+      <span id="current-time" class="font-mono text-blue-900">کات</span>
+    </div>
+
+    <!-- Close Button -->
     <button onclick="closeApp()" class="bg-red-600 hover:bg-red-700 text-white font-bold text-sm px-5 py-2 rounded shadow-md border border-red-400">
       داخستن
     </button>
   </div>
 
   <!-- Center Logo Container -->
-  <div class="flex flex-col items-center pt-6 pb-4">
+  <div class="flex flex-col items-center pt-2 pb-4">
     <div class="bg-white/95 px-8 py-3 rounded-lg shadow-2xl border border-gray-200 flex flex-col items-center min-w-[300px]">
       <div class="flex items-center gap-3">
         <div class="text-amber-700 font-extrabold text-4xl leading-none">(((</div>
@@ -72,13 +82,46 @@
   </div>
 
   <script>
+    // Function to update live date, Kurdish day name, and time
+    function updateDateTime() {
+      const now = new Date();
+      
+      // Days of the week in Kurdish
+      const days = [
+        'یەک شەممە', 'دوو شەممە', 'سێ شەممە', 'چوار شەممە', 
+        'پێنج شەممە', 'جومعە', 'شەممە'
+      ];
+      
+      // Get day name
+      document.getElementById('current-day').textContent = days[now.getDay()];
+      
+      // Format Date (YYYY-MM-DD)
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      document.getElementById('current-date').textContent = `${year}-${month}-${day}`;
+      
+      // Format Time (HH:MM:SS)
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      const seconds = String(now.getSeconds()).padStart(2, '0');
+      document.getElementById('current-time').textContent = `${hours}:${minutes}:${seconds}`;
+    }
+
+    // Run immediately and update every second
+    updateDateTime();
+    setInterval(updateDateTime, 1000);
+
     function openModule(moduleName) {
       if (moduleName === 'staff') {
         window.location.href = 'karmand.html'; // Opens karmand.html file
+      } else if (moduleName === 'electricity') {
+        window.location.href = 'karaba.html'; // Opens karaba.html file
       } else {
         alert('ئەم بەشە لە فایلی خۆیدا دەکرێتەوە.');
       }
     }
+    
     function closeApp() {
       if(confirm("ئایا دڵنیایت لە داخستنی بەرنامەکە؟")) {
         window.close();
