@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ckb" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>سیستەمی بەڕێوەبردنی هوتێل - JILLA HOTEL</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Vazirmatn', sans-serif; }
+    .dashboard-bg {
+      background: linear-gradient(135deg, #d946ef 0%, #e11d48 25%, #f97316 45%, #0284c7 80%, #0f172a 100%);
+    }
+    .access-btn {
+      background-color: #1e40af;
+      border: 1px solid #60a5fa;
+      box-shadow: 2px 3px 6px rgba(0,0,0,0.4);
+      transition: all 0.15s ease-in-out;
+    }
+    .access-btn:hover {
+      background-color: #2563eb;
+      transform: translateY(-1px);
+    }
+  </style>
+</head>
+<body class="dashboard-bg min-h-screen flex flex-col justify-between p-4 md:p-8 relative select-none">
+  
+  <!-- Top Close Button -->
+  <div class="absolute top-4 right-4 z-10">
+    <button onclick="closeApp()" class="bg-red-600 hover:bg-red-700 text-white font-bold text-sm px-5 py-2 rounded shadow-md border border-red-400">
+      داخستن
+    </button>
+  </div>
+
+  <!-- Center Logo Container -->
+  <div class="flex flex-col items-center pt-6 pb-4">
+    <div class="bg-white/95 px-8 py-3 rounded-lg shadow-2xl border border-gray-200 flex flex-col items-center min-w-[300px]">
+      <div class="flex items-center gap-3">
+        <div class="text-amber-700 font-extrabold text-4xl leading-none">(((</div>
+        <div class="text-center">
+          <div class="text-[#7f1d1d] font-bold text-2xl font-serif tracking-wide">فندق جيلا</div>
+          <div class="text-[#1e3a8a] font-black text-2xl font-serif tracking-widest uppercase">JILLA HOTEL</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Navigation Menu Grid -->
+  <div class="max-w-3xl mx-auto w-full grid grid-cols-1 md:grid-cols-2 gap-4 px-4 my-auto">
+    
+    <!-- Right Column -->
+    <div class="space-y-3.5">
+      <button onclick="openModule('daily')" class="access-btn w-full py-3 px-4 rounded text-center text-white font-bold text-lg">جەدوەلی ڕۆژانه</button>
+      <button onclick="openModule('rooms')" class="access-btn w-full py-3 px-4 rounded text-center text-white font-bold text-lg">جەدوەلی ژوورەکان</button>
+      <button onclick="openModule('users')" class="access-btn w-full py-3 px-4 rounded text-center text-white font-bold text-lg">یوزەرەکان</button>
+      <button onclick="openModule('electricity')" class="access-btn w-full py-3 px-4 rounded text-center text-white font-bold text-lg">کارەبا</button>
+    </div>
+
+    <!-- Left Column -->
+    <div class="space-y-3.5">
+      <button onclick="openModule('receipt')" class="access-btn w-full py-3 px-4 rounded text-center text-white font-bold text-lg">وەصل</button>
+      <button onclick="openModule('bread')" class="access-btn w-full py-3 px-4 rounded text-center text-white font-bold text-lg">صمون</button>
+      <button onclick="openModule('staff')" class="access-btn w-full py-3 px-4 rounded text-center text-white font-bold text-lg bg-blue-700">کارمەند</button>
+      <button onclick="openModule('leave')" class="access-btn w-full py-3 px-4 rounded text-center text-white font-bold text-lg">مۆڵەتی کارمەند</button>
+    </div>
+
+  </div>
+
+  <!-- Bottom Footer Status -->
+  <div class="text-center text-white/80 text-xs py-2 font-mono">
+    Jilla Hotel Management System © 2026
+  </div>
+
+  <script>
+    function openModule(moduleName) {
+      if (moduleName === 'staff') {
+        window.location.href = 'karmand.html'; // Opens karmand.html file
+      } else {
+        alert('ئەم بەشە لە فایلی خۆیدا دەکرێتەوە.');
+      }
+    }
+    function closeApp() {
+      if(confirm("ئایا دڵنیایت لە داخستنی بەرنامەکە؟")) {
+        window.close();
+      }
+    }
+  </script>
+</body>
+</html>
