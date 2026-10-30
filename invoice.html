@@ -1,16 +1,15 @@
 <!DOCTYPE html>
-<html lang="ckb" dir="rtl" class="light">
+<html lang="ckb" dir="rtl" id="htmlRoot">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>فۆرمی وەصل - هوتێل جیلا[cite: 1]</title>
-  <link rel="icon" href="jilla.icon" type="image/x-icon">
+  <title id="pageTitle">وەصلەکان - هوتێل جیلا</title>
+  <!-- Favicon (Tab Logo) -->
+  <link rel="icon" type="image/jpeg" href="images/icon.jpeg">
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Supabase Client JS -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <!-- html2pdf for downloading report -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.2/html2pdf.bundle.min.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
   <style>
     body { font-family: 'Vazirmatn', sans-serif; }
     .dashboard-bg {
@@ -19,55 +18,126 @@
     .access-row { height: 30px !important; }
     .access-cell { padding: 3px 6px !important; line-height: 1.1 !important; }
 
+    /* Toast Notification Animation */
+    @keyframes fadeInOut {
+      0% { opacity: 0; transform: translateY(-20px); }
+      15% { opacity: 1; transform: translateY(0); }
+      85% { opacity: 1; transform: translateY(0); }
+      100% { opacity: 0; transform: translateY(-20px); }
+    }
+    .toast-alert {
+      animation: fadeInOut 2.5s ease-in-out forwards;
+    }
+
+    /* Perfect A4 Print Styles & Hiding Scrollbars/Buttons */
     @media print {
+      @page {
+        size: A4 portrait;
+        margin: 5mm;
+      }
       body * { visibility: hidden !important; }
-      #printModal, #printModal * { visibility: visible !important; }
+      #printModal, #printModal *, #printModalContent, #printModalContent * { visibility: visible !important; }
       #printModal {
         position: absolute !important;
         left: 0 !important;
         top: 0 !important;
         width: 100% !important;
-        height: 100% !important;
-        background: white !important;
+        height: auto !important;
+        background: #ffffff !important;
+        z-index: 99999 !important;
         display: block !important;
         padding: 0 !important;
         margin: 0 !important;
         overflow: visible !important;
       }
-      #printArea {
+      #printModalContent {
         position: absolute !important;
         left: 0 !important;
         top: 0 !important;
         width: 100% !important;
-        max-width: 100% !important;
-        margin: 0 !important;
-        padding: 10mm !important;
+        background: #ffffff !important;
+        color: #000000 !important;
         box-shadow: none !important;
-        background: white !important;
+        padding: 5px !important;
+        max-height: none !important;
+        overflow: visible !important;
       }
       .no-print { display: none !important; }
     }
   </style>
+  <script>
+    // Prevent browser back button
+    history.pushState(null, null, location.href);
+    window.addEventListener('popstate', function () {
+      history.pushState(null, null, location.href);
+      alert('ڕێگەپێدراو نییە بگەڕێیتەوە دواوە!');
+    });
+  </script>
 </head>
 <body class="dashboard-bg min-h-screen p-2 md:p-4 select-none text-slate-100 text-xs">
 
-  <!-- Header -->
-  <div class="max-w-[85%] mx-auto flex justify-between items-center mb-3 no-print">
-    <div class="flex items-center gap-2 bg-white/95 px-3 py-1.5 rounded-lg shadow-md border border-gray-200">
-      <img id="hotel-logo" src="images/logo_black.png" alt="لۆگۆی هوتێل جیلا" class="h-8 w-auto object-contain">
+  <!-- FULL SCREEN LOADING OVERLAY -->
+  <div id="loadingOverlay" class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden justify-center items-center z-[100] flex-col gap-3">
+    <div class="w-12 h-12 border-4 border-amber-400 border-t-transparent rounded-full animate-spin"></div>
+    <div id="loadingText" class="text-white font-bold text-sm tracking-wide">تکایە چاوەڕێ بە...</div>
+  </div>
+
+  <!-- AUTO TOAST NOTIFICATION CONTAINER -->
+  <div id="toastContainer" class="fixed top-5 left-1/2 transform -translate-x-1/2 z-[110] pointer-events-none"></div>
+
+  <!-- CUSTOM DELETE CONFIRMATION MODAL -->
+  <div id="confirmModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden justify-center items-center p-2 z-[120] no-print">
+    <div class="bg-white text-slate-900 rounded-xl max-w-sm w-full p-5 shadow-2xl space-y-4 text-center border border-gray-100">
+      <div class="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto text-xl font-bold">
+        ⚠️
+      </div>
+      <div class="space-y-1">
+        <h3 id="confModalTitle" class="font-extrabold text-slate-900 text-sm">ئاگاداری سڕینەوە</h3>
+        <p id="confirmMessage" class="text-xs text-gray-600">ئایا دڵنیایت لە سڕینەوەی ئەم داتایە؟</p>
+      </div>
+      <div class="flex gap-2 pt-2">
+        <button id="confirmCancelBtn" type="button" class="flex-1 bg-gray-200 hover:bg-gray-300 text-slate-800 font-bold py-2 px-3 rounded-lg text-xs transition">پەشیمانبوونەوە</button>
+        <button id="confirmOkBtn" type="button" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-3 rounded-lg text-xs shadow transition">بەڵێ، بسڕەوە</button>
+      </div>
     </div>
-    <div class="flex items-center gap-2">
-      <a href="index.html" class="bg-slate-800 hover:bg-slate-900 text-white font-bold text-[11px] px-3 py-1.5 rounded-lg shadow-md border border-slate-700">
-        گەڕانەوە بۆ سەرەکی
-      </a>
+  </div>
+
+  <!-- Header with Dynamic Logo & Language Dropdown -->
+  <div class="max-w-[85%] mx-auto flex flex-col md:flex-row justify-between items-center mb-3 no-print gap-2">
+    <div class="flex items-center gap-3 bg-white/95 px-3 py-1.5 rounded-lg shadow-md border border-gray-200">
+      <img id="hotelLogo" 
+           src="images/logo_black.png" 
+           onerror="this.src='images/logo_black.png';" 
+           alt="Jilla Hotel Logo" 
+           class="h-8 w-auto object-contain">
+      <h1 id="lbl_topBrand" class="text-black font-black text-sm">هوتێل جیلا - Jilla Hotel</h1>
     </div>
+
+    <!-- GLOBAL LANGUAGE DROPDOWN SELECTOR -->
+    <div class="flex items-center gap-2 bg-white/95 px-3 py-1.5 rounded-lg shadow-md border border-gray-200 text-slate-800">
+      <span class="text-[11px] font-bold text-amber-900" id="lbl_langLabel">زمان / Language:</span>
+      <select id="globalLangSelect" onchange="changeGlobalLanguage(this.value)" class="bg-slate-50 border border-gray-300 rounded px-2 py-1 text-[11px] font-bold text-slate-900 focus:outline-none focus:border-amber-600">
+        <option value="ku">کوردی (Kurdish)</option>
+        <option value="ar">عەرەبی (Arabic)</option>
+        <option value="en">ئینگلیزی (English)</option>
+      </select>
+    </div>
+
+    <a href="main.html" id="lbl_backBtn" class="bg-slate-800 hover:bg-slate-900 text-white font-bold text-[11px] px-3 py-1.5 rounded-lg shadow-md border border-slate-700">
+      گەڕانەوە بۆ سەرەکی
+    </a>
   </div>
 
   <!-- Main Container -->
   <div class="max-w-[85%] mx-auto no-print space-y-3">
-    <div class="bg-white/95 backdrop-blur rounded-lg p-3 shadow-xl border border-gray-200 flex flex-col md:flex-row justify-between items-center gap-2 text-slate-800">
-      <h2 class="text-sm font-extrabold text-blue-900">لیستی وەصلە تۆمارکراوەکان</h2>
-      <button onclick="openInvoiceModal()" class="bg-blue-700 hover:bg-blue-800 text-white font-bold px-3 py-1.5 rounded shadow transition flex items-center gap-1 text-[11px]">
+    <div class="bg-white/95 backdrop-blur rounded-lg p-3 shadow-xl border border-gray-200 flex flex-col md:flex-row justify-between items-center gap-3 text-slate-800">
+      <div class="flex items-center gap-3 w-full md:w-auto">
+        <h2 id="lbl_tableTitle" class="text-sm font-extrabold text-blue-900 whitespace-nowrap">لیستی وەصلە تۆمارکراوەکان</h2>
+        <div class="relative w-full md:w-64">
+          <input type="text" id="searchInput" oninput="filterInvoicesTable()" placeholder="گەڕان (ناو، ژ.وەصل، کۆمپانیا)..." class="w-full bg-slate-50 border border-gray-300 rounded-lg py-1 px-2.5 text-[11px] text-slate-800 focus:outline-none focus:border-blue-700 font-mono">
+        </div>
+      </div>
+      <button onclick="openInvoiceModal()" id="lbl_newInvoiceBtn" class="bg-amber-600 hover:bg-amber-700 text-white font-bold px-3 py-1.5 rounded shadow transition flex items-center gap-1 text-[11px] whitespace-nowrap">
         <span>+ تۆمارکردنی وەصلی نوێ</span>
       </button>
     </div>
@@ -77,21 +147,17 @@
       <div class="overflow-x-auto">
         <table class="w-full text-right border-collapse">
           <thead>
-            <tr class="bg-blue-900 text-white text-[11px] access-row">
-              <th class="access-cell border text-center">کردارەکان</th>
-              <th class="access-cell border text-center">ئایدی</th>
-              <th class="access-cell border">ژمارەی وەصل</th>
-              <th class="access-cell border">ناوی میوان</th>
-              <th class="access-cell border">کۆمپانیا/فەرمانگە</th>
-              <th class="access-cell border">ئیمەیل / تەلەفۆن</th>
-              <th class="access-cell border text-center">شەوەکان</th>
-              <th class="access-cell border text-center">بەرواری هاتن</th>
-              <th class="access-cell border text-center">بەرواری دەرچوون</th>
-              <th class="access-cell border">ڕێسپشن</th>
+            <tr class="bg-slate-900 text-white text-[11px] access-row">
+              <th class="access-cell border text-center w-28" id="th_actions">کردارەکان</th>
+              <th class="access-cell border hidden">ئایدی</th>
+              <th class="access-cell border" id="th_invNo">ڕەقەم وەصل</th>
+              <th class="access-cell border" id="th_guestName">ناوی وەرگری وەصل</th>
+              <th class="access-cell border" id="th_company">کۆمپانیا/فەرمانگە</th>
+              <th class="access-cell border" id="th_emailPhone">ئیمەیل / تەلەفۆن</th>
             </tr>
           </thead>
           <tbody id="invoiceTableBody" class="font-medium">
-            <tr><td colspan="10" class="text-center p-3 text-gray-500">چاوەڕوانبن، داتا دەهێنرێت...</td></tr>
+            <tr><td colspan="6" class="text-center p-3 text-gray-500" id="lbl_loadingText">چاوەڕوانبن، داتا دەهێنرێت...</td></tr>
           </tbody>
         </table>
       </div>
@@ -100,256 +166,359 @@
 
   <footer class="max-w-[85%] mx-auto bg-slate-800 border border-slate-700 px-3 py-1.5 text-[11px] text-slate-400 flex justify-between items-center rounded-lg mt-3 no-print">
     <div id="invoiceCount">کۆی وەصلەکان: 0</div>
-    <div>Jilla Hotel Management System</div>
+    <div id="lbl_footerSys">Jilla Hotel Management System</div>
   </footer>
 
-  <!-- INVOICE MODAL -->
+  <!-- MAIN INVOICE MODAL -->
   <div id="invoiceModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden justify-center items-center p-2 z-50 no-print">
     <div class="bg-white text-slate-800 border border-gray-200 rounded-lg p-3 max-w-4xl w-full max-h-[96vh] overflow-y-auto shadow-2xl space-y-2">
+      
       <div class="flex justify-between items-center border-b border-gray-200 pb-1.5">
-        <h3 id="modalTitle" class="text-xs font-bold text-blue-900">تۆماری داتا بۆ وەصلی نوێ</h3>
+        <h3 id="modalTitle" class="text-xs font-bold text-amber-800">تۆمارکردنی وەصلی نوێ</h3>
         <button onclick="closeInvoiceModal()" class="text-gray-500 hover:text-red-600 font-bold text-sm">✕</button>
       </div>
       
       <form id="invoiceForm" onsubmit="saveInvoice(event)" class="space-y-2 text-[11px]">
         <input type="hidden" id="editInvoiceId">
+
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-3">
+          <!-- RIGHT SIDE: Main Info -->
           <div class="lg:col-span-5 bg-slate-50 p-2.5 rounded border border-slate-200 space-y-2 h-fit">
-            <h4 class="font-bold text-blue-900 text-[11px] border-b pb-1">زانیاری سەرەکی</h4>
+            
             <div class="grid grid-cols-2 gap-1.5">
               <div>
-                <label class="block font-bold text-gray-700 mb-0.5">ژمارەی وەصل *</label>
+                <label class="block font-bold text-gray-700 mb-0.5" id="lbl_f_invNo">ڕەقەم وەصل *</label>
                 <input type="text" id="en_invoice_info_NO" required placeholder="ژمارە..." class="w-full bg-white border border-gray-300 rounded p-1 font-mono">
               </div>
               <div>
-                <label class="block font-bold text-gray-700 mb-0.5">ناوی میوان *</label>
-                <input type="text" id="en_invoice_info_GuestsName" required placeholder="ناوی میوان..." class="w-full bg-white border border-gray-300 rounded p-1">
+                <label class="block font-bold text-gray-700 mb-0.5" id="lbl_f_guestName">ناوی وەرگری وەصل *</label>
+                <input type="text" id="en_invoice_info_GuestsName" required placeholder="ناوی وەرگر..." class="w-full bg-white border border-gray-300 rounded p-1">
               </div>
             </div>
+
             <div>
-              <label class="block font-bold text-gray-700 mb-0.5">کۆمپانیا / فەرمانگە</label>
+              <label class="block font-bold text-gray-700 mb-0.5" id="lbl_f_company">کۆمپانیا / فەرمانگە</label>
               <input type="text" id="en_invoice_info_Company_travelagent" placeholder="کۆمپانیا..." class="w-full bg-white border border-gray-300 rounded p-1">
             </div>
+
             <div class="grid grid-cols-3 gap-1">
               <div>
-                <label class="block font-bold text-gray-700 mb-0.5">هاتن *</label>
+                <label class="block font-bold text-gray-700 mb-0.5" id="lbl_f_arrival">بەرواری هاتن *</label>
                 <input type="date" id="en_invoice_info_ArrivalDate" required onchange="calculateNightsForAll()" class="w-full bg-white border border-gray-300 rounded p-1 font-mono text-[10px]">
               </div>
               <div>
-                <label class="block font-bold text-gray-700 mb-0.5">دەرچوون *</label>
+                <label class="block font-bold text-gray-700 mb-0.5" id="lbl_f_departure">بەرواری دەرچوون *</label>
                 <input type="date" id="en_invoice_info_DepartureDate" required onchange="calculateNightsForAll()" class="w-full bg-white border border-gray-300 rounded p-1 font-mono text-[10px]">
               </div>
               <div>
-                <label class="block font-bold text-blue-900 mb-0.5">شەو</label>
-                <input type="text" id="en_invoice_info_TotalNaights" readonly class="w-full bg-blue-50 border border-blue-200 rounded p-1 font-bold text-blue-900 text-center">
+                <label class="block font-bold text-amber-900 mb-0.5" id="lbl_f_nights">شەو</label>
+                <input type="text" id="en_invoice_info_TotalNaights" readonly class="w-full bg-amber-50 border border-amber-200 rounded p-1 font-bold text-amber-900 text-center">
               </div>
             </div>
+
             <div>
-              <label class="block font-bold text-gray-700 mb-0.5">ئیمەیل / تەلەفۆن</label>
+              <label class="block font-bold text-gray-700 mb-0.5" id="lbl_f_email">ئیمەیل / تەلەفۆن</label>
               <input type="text" id="en_invoice_info_Email" placeholder="mail@test.com / 0750..." class="w-full bg-white border border-gray-300 rounded p-1">
             </div>
+
             <div class="grid grid-cols-2 gap-1.5">
               <div>
-                <label class="block font-bold text-gray-700 mb-0.5">دۆکیومێنت *</label>
+                <label class="block font-bold text-gray-700 mb-0.5" id="lbl_f_doc">دۆکیومێنت *</label>
                 <select id="en_invoice_info_Document" required class="w-full bg-white border border-gray-300 rounded p-1">
-                  <option value="">هەڵبژێرە...</option>
-                  <option value="مۆڵەتی شوفێرى">مۆڵەتی شوفێرى</option>
-                  <option value="پاسەپۆرت">پاسەپۆرت</option>
-                  <option value="نفوس">نفوس</option>
-                  <option value="کارتی زانیاری">کارتی زانیاری</option>
-                  <option value="کارتی نیشتیمانی">کارتی نیشتیمانی</option>
-                  <option value="هیتر">هیتر</option>
+                  <option value="" id="opt_selectDoc">هەڵبژێرە...</option>
+                  <option value="مۆڵەتی شوفێرى" id="opt_doc1">مۆڵەتی شوفێرى</option>
+                  <option value="پاسەپۆرت" id="opt_doc2">پاسەپۆرت</option>
+                  <option value="نفوس" id="opt_doc3">نفوس</option>
+                  <option value="کارتی زانیاری" id="opt_doc4">کارتی زانیاری</option>
+                  <option value="کارتی نیشتیمانی" id="opt_doc5">کارتی نیشتیمانی</option>
+                  <option value="هیتر" id="opt_doc6">هیتر</option>
                 </select>
               </div>
               <div>
-                <label class="block font-bold text-gray-700 mb-0.5">ژمارەی ناسنامە</label>
+                <label class="block font-bold text-gray-700 mb-0.5" id="lbl_f_docNo">ژمارەی ناسنامە</label>
                 <input type="text" id="en_invoice_info_DocumentNO" placeholder="ژمارە..." class="w-full bg-white border border-gray-300 rounded p-1 font-mono">
               </div>
             </div>
+
             <div>
-              <label class="block font-bold text-gray-700 mb-0.5">ڕێسپشن *</label>
-              <input type="text" id="en_invoice_info_reception" value="Jilla Hotel Administration" required class="w-full bg-white border border-gray-300 rounded p-1 font-bold text-blue-900">
+              <label class="block font-bold text-gray-700 mb-0.5" id="lbl_f_reception">ڕێسپشن *</label>
+              <input type="text" id="en_invoice_info_reception" value="Jilla Hotel Administration" required class="w-full bg-white border border-gray-300 rounded p-1 font-bold text-amber-900">
             </div>
           </div>
 
+          <!-- LEFT SIDE: Subforms -->
           <div class="lg:col-span-7 space-y-2">
-            <div class="bg-blue-50/60 p-2.5 rounded border border-blue-200 space-y-1.5">
-              <div class="flex justify-between items-center border-b border-blue-200 pb-1">
-                <h4 class="font-bold text-blue-900 text-[11px]">ژوورەکان</h4>
-                <button type="button" onclick="addRoomRow()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-0.5 rounded font-bold text-[10px] shadow">+ ژوور</button>
+            <!-- 1. ROOMS SUBFORM -->
+            <div class="bg-amber-50/40 p-2.5 rounded border border-amber-200 space-y-1.5">
+              <div class="flex justify-between items-center border-b border-amber-200 pb-1">
+                <h4 class="font-bold text-amber-900 text-[11px]" id="lbl_s_rooms">ژوورەکان</h4>
+                <button type="button" onclick="openRoomModal()" id="lbl_addRoomBtn" class="bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-0.5 rounded font-bold text-[10px] shadow">
+                  + ژوور
+                </button>
               </div>
+
               <div class="overflow-x-auto max-h-36 overflow-y-auto">
                 <table class="w-full text-right border-collapse bg-white rounded border border-gray-200 text-[10px]">
                   <thead>
-                    <tr class="bg-slate-700 text-white sticky top-0">
-                      <th class="p-1 border text-center w-6">✕</th>
-                      <th class="p-1 border w-16">ژوور</th>
-                      <th class="p-1 border w-20">کۆدی حجز</th>
-                      <th class="p-1 border text-center w-14">میوان</th>
-                      <th class="p-1 border">نرخ/شەو و کۆی گشتی</th>
+                    <tr class="bg-slate-800 text-white sticky top-0">
+                      <th class="p-1.5 border text-center w-20" id="th_r_action">کردار</th>
+                      <th class="p-1.5 border w-16" id="th_r_num">ژمارەی ژوور</th>
+                      <th class="p-1.5 border w-20" id="th_r_code">کۆدی حجز</th>
+                      <th class="p-1.5 border text-center w-14" id="th_r_guests">میوان</th>
+                      <th class="p-1.5 border" id="th_r_price">نرخ</th>
                     </tr>
                   </thead>
                   <tbody id="roomsContainer"></tbody>
                 </table>
               </div>
-              <div class="flex justify-between items-center bg-blue-100/70 px-2 py-1 rounded text-[11px] font-bold text-blue-900">
-                <span>کۆی گشتی ژوورەکان:</span>
-                <span id="roomsGrandTotal" class="font-mono text-emerald-700 text-xs">0</span>
+              <div class="flex justify-between items-center bg-amber-100/70 px-2 py-1 rounded text-[11px] font-bold text-amber-900">
+                <span id="roomsSummaryText">کۆی گشتی 0 ژوور بە بڕی 0</span>
               </div>
             </div>
 
-            <div class="bg-amber-50/60 p-2.5 rounded border border-amber-200 space-y-1.5">
-              <div class="flex justify-between items-center border-b border-amber-200 pb-1">
-                <div class="flex items-center gap-2">
-                  <h4 class="font-bold text-amber-900 text-[11px]">خزمەتگوزارییەکان</h4>
-                  <button type="button" onclick="openAddServiceModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-2 py-0.5 rounded font-bold text-[10px] shadow">➕ زیادکردنی خزمەتگوزاری نوێ</button>
-                </div>
-                <button type="button" onclick="addServiceRow()" class="bg-amber-600 hover:bg-amber-700 text-white px-2 py-0.5 rounded font-bold text-[10px] shadow">+ خزمەتگوزاری</button>
+            <!-- 2. SERVICES SUBFORM -->
+            <div class="bg-orange-50/40 p-2.5 rounded border border-orange-200 space-y-1.5">
+              <div class="flex justify-between items-center border-b border-orange-200 pb-1">
+                <h4 class="font-bold text-orange-900 text-[11px]" id="lbl_s_services">خزمەتگوزاریەکان</h4>
+                <button type="button" onclick="openServiceModal()" id="lbl_addServBtn" class="bg-amber-600 hover:bg-amber-700 text-white px-2 py-0.5 rounded font-bold text-[10px] shadow">
+                  + خزمەتگوزاری
+                </button>
               </div>
+
               <div class="overflow-x-auto max-h-36 overflow-y-auto">
                 <table class="w-full text-right border-collapse bg-white rounded border border-gray-200 text-[10px]">
                   <thead>
-                    <tr class="bg-slate-700 text-white sticky top-0">
-                      <th class="p-1 border text-center w-6">✕</th>
-                      <th class="p-1 border">جۆری خزمەتگوزاری</th>
-                      <th class="p-1 border text-center w-12">دانە</th>
-                      <th class="p-1 border">نرخ و کۆی گشتی</th>
+                    <tr class="bg-slate-800 text-white sticky top-0">
+                      <th class="p-1.5 border text-center w-20" id="th_s_action">کردار</th>
+                      <th class="p-1.5 border" id="th_s_type">جۆری خزمەتگوزاری</th>
+                      <th class="p-1.5 border text-center w-12" id="th_s_qty">دانە</th>
+                      <th class="p-1.5 border" id="th_s_price">نرخ</th>
+                      <th class="p-1.5 border" id="th_s_total">کۆی گشتی</th>
                     </tr>
                   </thead>
                   <tbody id="servicesContainer"></tbody>
                 </table>
               </div>
-              <div class="flex justify-between items-center bg-amber-100/70 px-2 py-1 rounded text-[11px] font-bold text-amber-900">
-                <span>کۆی گشتی خزمەتگوزارییەکان:</span>
-                <span id="servicesGrandTotal" class="font-mono text-emerald-700 text-xs">0</span>
+              <div class="flex justify-between items-center bg-orange-100/70 px-2 py-1 rounded text-[11px] font-bold text-orange-900">
+                <span id="servicesSummaryText">کۆی گشتی خزمەتگوزاری 0</span>
               </div>
             </div>
           </div>
         </div>
-        <div class="flex justify-end items-center pt-2 border-t border-gray-200">
+
+        <!-- Submit Actions -->
+        <div class="flex justify-between items-center pt-2 border-t border-gray-200">
+          <div>
+            <button type="button" id="modalPrintBtn" onclick="printCurrentModalInvoice()" class="bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-1 rounded font-bold text-[11px] shadow hidden flex items-center gap-1">
+              <span>🖨️ <span id="lbl_m_print">پرێنت کردن</span></span>
+            </button>
+          </div>
           <div class="flex gap-2">
-            <button type="button" onclick="closeInvoiceModal()" class="bg-gray-400 hover:bg-gray-500 text-white px-3 py-1 rounded text-[11px]">پاشگەزبوونەوە</button>
-            <button type="submit" class="bg-blue-700 hover:bg-blue-800 text-white px-5 py-1 rounded font-bold text-[11px] shadow">تۆمارکردنی هەمووی</button>
+            <button type="button" onclick="closeInvoiceModal()" id="lbl_m_close" class="bg-gray-400 hover:bg-gray-500 text-white px-3 py-1 rounded text-[11px]">داخستن</button>
+            <button type="button" id="modalDeleteBtn" onclick="deleteCurrentModalInvoice()" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded font-bold text-[11px] shadow hidden">سڕینەوە</button>
+            <button type="submit" id="saveBtn" class="bg-amber-600 hover:bg-amber-700 text-white px-5 py-1 rounded font-bold text-[11px] shadow">تۆمارکردنی هەمووی</button>
           </div>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- PRINT / REPORT MODAL (A4) -->
-  <div id="printModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden justify-center items-center p-2 z-50 overflow-y-auto">
-    <div class="bg-white rounded-xl max-w-3xl w-full p-4 shadow-2xl relative my-4 max-h-[95vh] flex flex-col text-black">
-      <div class="flex justify-between items-center mb-3 pb-2 border-b flex-shrink-0 no-print">
-        <h3 class="text-base font-bold text-gray-800">ڕاپۆرتی وەصل</h3>
+  <!-- ULTRA-PREMIUM PRINT INVOICE MODAL (KURDISH ONLY) -->
+  <div id="printModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden justify-center items-center p-2 z-[90]">
+    <div class="bg-white text-slate-900 rounded-xl max-w-3xl w-full max-h-[96vh] overflow-y-auto shadow-2xl flex flex-col">
+      
+      <div class="bg-slate-900 text-white px-4 py-3 flex justify-between items-center rounded-t-xl no-print sticky top-0 z-50 shadow-md">
+        <h3 id="previewTitle" class="font-bold text-sm">پرێنتی وەصل</h3>
         <div class="flex gap-2">
-          <button onclick="window.print()" class="bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold px-3 py-1.5 rounded shadow transition">پرێنت (Print)</button>
-          <button onclick="downloadPDF()" class="bg-red-600 hover:bg-red-700 text-white text-xs font-bold px-3 py-1.5 rounded shadow transition">دابەزاندن بە PDF</button>
-          <button onclick="closePrintModal()" class="bg-gray-500 hover:bg-gray-600 text-white text-xs font-bold px-3 py-1.5 rounded shadow transition">داخستن</button>
+          <button onclick="triggerActualPrint()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-1.5 rounded font-bold text-xs shadow flex items-center gap-1">
+            <span>🖨️ پرێنت کردن</span>
+          </button>
+          <button onclick="closePrintModal()" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded font-bold text-xs">داخستن (X)</button>
         </div>
       </div>
 
-      <div class="overflow-y-auto flex-grow bg-gray-100 p-2 flex justify-center">
-        <div id="printArea" class="bg-white p-6 text-black shadow" dir="rtl" style="width: 190mm;">
+      <!-- FORMAL SOFT-ORANGE GRADIENT INVOICE TEMPLATE -->
+      <div id="printModalContent" style="background: #ffffff; color: #1e293b; font-family: 'Vazirmatn', sans-serif; font-size: 11px; padding: 15px; width: 100%; max-width: 800px; margin: 0 auto; box-sizing: border-box; position: relative; overflow-y: auto; direction: rtl;">
+        
+        <div style="position: absolute; top: -80px; left: -80px; width: 220px; height: 220px; background: linear-gradient(135deg, rgba(110, 2, 111, 0.08) 0%, rgba(250, 137, 26, 0.04) 100%); border-radius: 50%; pointer-events: none;"></div>
+
+        <div style="background: linear-gradient(135deg, rgba(110, 2, 111, 0.12) 0%, rgba(250, 137, 26, 0.15) 100%); color: #6E026F; padding: 14px 18px; border-radius: 12px; display: table; width: 100%; margin-bottom: 12px; box-shadow: 0 8px 20px -4px rgba(110, 2, 111, 0.08); position: relative; border: 1px solid rgba(110, 2, 111, 0.2);">
           
-          <!-- Report Header -->
-          <div class="flex justify-between items-center border-b-2 border-black pb-3 mb-4">
-            <div>
-              <h2 class="text-lg font-black text-blue-900">هوتێل جیلا - JILLA HOTEL</h2>
-              <p class="text-[10px] text-gray-600">هەولێر، کوردستان | هەولێر</p>
+          <div style="display: table-cell; vertical-align: middle; width: 72%;">
+            <div style="display: table; width: 100%;">
+              <div style="display: table-cell; vertical-align: middle; width: 180px;">
+                <div style="background: #F1E6C9; padding: 8px 16px; border-radius: 16px; box-shadow: 0 3px 8px rgba(110,2,111,0.18); display: inline-block; border: 1.5px solid rgba(110,2,111,0.25);">
+                  <img src="images/logo_black.png" 
+                       onerror="this.src='images/logo_black.png';" 
+                       alt="Jilla Hotel Logo" 
+                       style="height: 56px; width: 155px; display: block; object-fit: contain;">
+                </div>
+              </div>
+              <div style="display: table-cell; vertical-align: middle; padding-right: 14px;">
+                <h1 style="font-size: 17px; font-weight: 900; margin: 0 0 3px 0; color: #6E026F; line-height: 1.2;">هوتێل جیلا - Jilla Hotel</h1>
+                <p style="font-size: 9px; color: #6E026F; margin: 0 0 2px 0; font-weight: 700; opacity: 0.9;">هه ولير - شه قامى ٦٠م - به رامبه ر نه خۆشخانەی بار</p>
+                <p style="font-size: 8.5px; color: #6E026F; margin: 0; font-family: monospace; font-weight: 900;">Tel: +964 750 941 5656 - +964 770 941 5656</p>
+              </div>
             </div>
-            <div class="text-left font-mono">
-              <div class="text-sm font-bold">ژمارەی وەصل: <span id="p_invoiceNo" class="text-blue-800"></span></div>
-              <div class="text-[11px] text-gray-600">بەروار: <span id="p_date"></span></div>
+          </div>
+
+          <div style="display: table-cell; vertical-align: middle; text-align: left; width: 28%;">
+            <div style="background: rgba(255, 255, 255, 0.95); padding: 8px 10px; border-radius: 8px; display: inline-block; border: 1px solid rgba(110, 2, 111, 0.2); box-shadow: 0 4px 12px rgba(0,0,0,0.05); min-width: 90px;">
+              <div style="font-size: 7.5px; color: #6E026F; font-weight: 900; text-transform: uppercase;">ژمارەی فاتوورە</div>
+              <div id="p_invoiceNo" style="font-size: 13px; font-weight: 900; font-family: monospace; color: #6E026F; margin-top: 2px;">-</div>
             </div>
           </div>
-
-          <!-- Guest Info Box -->
-          <div class="bg-gray-50 border border-gray-300 rounded p-3 mb-4 text-xs grid grid-cols-2 gap-2">
-            <div><strong>ناوی میوان:</strong> <span id="p_guestName"></span></div>
-            <div><strong>کۆمپانیا / فەرمانگە:</strong> <span id="p_company"></span></div>
-            <div><strong>بەرواری هاتن:</strong> <span id="p_arrival"></span></div>
-            <div><strong>بەرواری دەرچوون:</strong> <span id="p_departure"></span></div>
-            <div><strong>ژمارەی شەوەکان:</strong> <span id="p_nights"></span></div>
-            <div><strong>تەلەفۆن / ئیمەیل:</strong> <span id="p_email"></span></div>
-          </div>
-
-          <!-- Rooms Table -->
-          <div class="mb-4">
-            <h4 class="font-extrabold text-blue-900 text-xs mb-1.5">ژوورەکان (Rooms)</h4>
-            <table class="w-full text-right border-collapse border border-black text-[11px]">
-              <thead>
-                <tr class="bg-gray-200 border-b border-black">
-                  <th class="p-1 border border-black text-center w-8">ژ.</th>
-                  <th class="p-1 border border-black">ژمارەی ژوور</th>
-                  <th class="p-1 border border-black">کۆدی حجز</th>
-                  <th class="p-1 border border-black text-center">میوان</th>
-                  <th class="p-1 border border-black text-center">نرخ/شەو</th>
-                  <th class="p-1 border border-black text-center">کۆی گشتی</th>
-                </tr>
-              </thead>
-              <tbody id="p_roomsBody"></tbody>
-            </table>
-          </div>
-
-          <!-- Services Table -->
-          <div class="mb-4">
-            <h4 class="font-extrabold text-amber-900 text-xs mb-1.5">خزمەتگوزارییەکان (Services)</h4>
-            <table class="w-full text-right border-collapse border border-black text-[11px]">
-              <thead>
-                <tr class="bg-gray-200 border-b border-black">
-                  <th class="p-1 border border-black text-center w-8">ژ.</th>
-                  <th class="p-1 border border-black">جۆری خزمەتگوزاری (کوردی / عەرەبی / ئینگلیزی)</th>
-                  <th class="p-1 border border-black text-center w-12">دانە</th>
-                  <th class="p-1 border border-black text-center">نرخ</th>
-                  <th class="p-1 border border-black text-center">کۆی گشتی</th>
-                </tr>
-              </thead>
-              <tbody id="p_servicesBody"></tbody>
-            </table>
-          </div>
-
-          <!-- Grand Total Summary Box -->
-          <div class="bg-blue-50 border border-blue-300 rounded p-3 mb-6 flex justify-between items-center text-sm font-black text-blue-900">
-            <span>کۆی گشتی پارەی وەصل:</span>
-            <span id="p_grandTotal" class="font-mono text-emerald-700 text-base">0</span>
-          </div>
-
-          <!-- Signatures -->
-          <div class="flex justify-between mt-12 pt-4 text-xs font-bold border-t border-gray-400">
-            <div>واژۆی پێشوازی (Reception): <span class="font-normal underline mr-1" id="p_reception"></span></div>
-            <div>واژۆی بەڕێوەبەر / دارایی: ........................................</div>
-          </div>
-
         </div>
+
+        <table style="width: 100%; border-collapse: collapse; background: linear-gradient(180deg, #fff7ed 0%, #ffffff 100%); border: 1px solid #fed7aa; border-radius: 8px; margin-bottom: 12px; font-size: 10px;">
+          <tr>
+            <td style="padding: 9px 12px; width: 50%; vertical-align: top;">
+              <div style="margin-bottom: 4px;"><strong style="color: #000000;">ناوی میوان :</strong> <span id="p_guestName" style="font-weight: 800; color: #000000;">-</span></div>
+              <div style="margin-bottom: 4px;"><strong style="color: #000000;">کۆمپانیا - فەرمانگە :</strong> <span id="p_company" style="font-weight: 800; color: #000000;">-</span></div>
+              <div style="margin-bottom: 4px;"><strong style="color: #000000;">ئیمەیل - تەلەفۆن :</strong> <span id="p_email" style="font-family: monospace; font-weight: 800; color: #000000;">-</span></div>
+              <div><strong style="color: #000000;">بەڵگەنامە (دوکیومێنت) :</strong> <span id="p_document" style="font-weight: 800; color: #000000;">-</span></div>
+            </td>
+            <td style="padding: 9px 12px; width: 50%; vertical-align: top; border-right: 2px solid #ffedd5;">
+              <div style="margin-bottom: 4px;"><strong style="color: #000000;">بەرواری هاتن ( Check-in ) :</strong> <span id="p_arrival" style="font-weight: 800; color: #000000;">-</span></div>
+              <div style="margin-bottom: 4px;"><strong style="color: #000000;">بەرواری دەرچوون ( Checkout ) :</strong> <span id="p_departure" style="font-weight: 800; color: #000000;">-</span></div>
+              <div style="margin-bottom: 4px;"><strong style="color: #000000;">کۆی گشتی شەوەکان :</strong> <span id="p_totalNights" style="font-family: monospace; font-weight: 800; color: #000000;">-</span></div>
+              <div><strong style="color: #000000;">ژمارەی بەڵگەنامە :</strong> <span id="p_documentNo" style="font-family: monospace; font-weight: 800; color: #000000;">-</span></div>
+            </td>
+          </tr>
+        </table>
+
+        <!-- 1. ROOMS TABLE -->
+        <div style="margin-bottom: 12px;">
+          <table style="width: 100%; border-collapse: collapse; font-size: 9.5px; text-align: right; border-radius: 6px; overflow: hidden; border: 1.5px solid #6E026F;">
+            <thead>
+              <tr style="background: linear-gradient(90deg, #F1E6C9 0%, rgba(250, 137, 26, 0.2) 100%); color: #6E026F; font-weight: 900; border-bottom: 1.5px solid #6E026F;">
+                <th style="padding: 5px 6px; text-align: center; width: 6%; border: 1px solid rgba(110, 2, 111, 0.2);">ژ.</th>
+                <th style="padding: 5px 6px; border: 1px solid rgba(110, 2, 111, 0.2);">ژمارەی ژوور</th>
+                <th style="padding: 5px 6px; border: 1px solid rgba(110, 2, 111, 0.2);">کۆدی حجز</th>
+                <th style="padding: 5px 6px; text-align: center; border: 1px solid rgba(110, 2, 111, 0.2);">ژ.میوان</th>
+                <th style="padding: 5px 6px; border: 1px solid rgba(110, 2, 111, 0.2);">نرخ</th>
+                <th style="padding: 5px 6px; text-align: center; border: 1px solid rgba(110, 2, 111, 0.2);">ژ.شەوەکان</th>
+                <th style="padding: 5px 6px; border: 1px solid rgba(110, 2, 111, 0.2);">کۆی گشتی</th>
+              </tr>
+            </thead>
+            <tbody id="printRoomsBody"></tbody>
+            <tfoot>
+              <tr style="background-color: #fff7ed; font-weight: 900; color: #000000;">
+                <td colspan="7" id="printRoomsFooter" style="padding: 6px 8px; text-align: right; border: 1.5px solid #6E026F; color: #000000;">کۆی گشتی بریتییە لە 0 ژوور دەکاتە بڕی 0</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <!-- 2. SERVICES TABLE -->
+        <div style="margin-bottom: 12px;">
+          <table style="width: 100%; border-collapse: collapse; font-size: 9.5px; text-align: right; border-radius: 6px; overflow: hidden; border: 1.5px solid #6E026F;">
+            <thead>
+              <tr style="background: linear-gradient(90deg, #F1E6C9 0%, rgba(250, 137, 26, 0.2) 100%); color: #6E026F; font-weight: 900; border-bottom: 1.5px solid #6E026F;">
+                <th style="padding: 5px 6px; text-align: center; width: 6%; border: 1px solid rgba(110, 2, 111, 0.2);">ژ.</th>
+                <th style="padding: 5px 6px; border: 1px solid rgba(110, 2, 111, 0.2);">خزمەتگوزارییەکان</th>
+                <th style="padding: 5px 6px; text-align: center; width: 12%; border: 1px solid rgba(110, 2, 111, 0.2);">دانە</th>
+                <th style="padding: 5px 6px; border: 1px solid rgba(110, 2, 111, 0.2);">نرخ</th>
+                <th style="padding: 5px 6px; border: 1px solid rgba(110, 2, 111, 0.2);">کۆی گشتی</th>
+              </tr>
+            </thead>
+            <tbody id="printServicesBody"></tbody>
+            <tfoot>
+              <tr style="background-color: #fff7ed; font-weight: 900; color: #000000;">
+                <td colspan="5" id="printServicesFooter" style="padding: 6px 8px; text-align: right; border: 1.5px solid #6E026F; color: #000000;">کۆی گشتی خزمەتگوزاری دەکاتە بڕی 0</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <!-- GRAND TOTAL BOX -->
+        <div style="margin-bottom: 15px; width: 100%;">
+          <div style="background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%); border: 2px solid #6E026F; border-radius: 8px; padding: 9px 14px; width: 100%; box-sizing: border-box; display: flex; flex-direction: column; gap: 3px; box-shadow: 0 4px 12px rgba(110, 2, 111, 0.08);">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-weight: 900; font-size: 10.5px; color: #000000;">کۆی گشتی :</span>
+              <span id="p_grandTotal" style="font-size: 13.5px; font-weight: 900; color: #000000; font-family: monospace;">0</span>
+            </div>
+            <div id="p_grandTotalWords" style="font-size: 9.5px; font-weight: bold; color: #000000; text-align: right; border-top: 1px dashed rgba(110, 2, 111, 0.3); padding-top: 3px; margin-top: 2px;">-</div>
+          </div>
+        </div>
+
+        <!-- SIGNATURES -->
+        <table style="width: 100%; margin-top: 15px; font-size: 10px; border-top: 1px dashed #cbd5e1; border-collapse: collapse;">
+          <tr>
+            <td style="width: 50%; text-align: center; padding-top: 12px; vertical-align: top;">
+              <div id="p_guestSign" style="font-weight: bold; margin-bottom: 14px; font-family: monospace; color: #000000;">-</div>
+              <div style="border-top: 1.5px solid #6E026F; padding-top: 4px; font-weight: bold; color: #000000; display: inline-block; width: 180px;">میوان - پارەدەر</div>
+            </td>
+            <td style="width: 50%; text-align: center; padding-top: 12px; vertical-align: top;">
+              <div id="p_receptionSign" style="font-weight: bold; margin-bottom: 14px; font-family: monospace; color: #000000;">hussein k. namiq</div>
+              <div style="border-top: 1.5px solid #6E026F; padding-top: 4px; font-weight: bold; color: #000000; display: inline-block; width: 180px;">کارمەندی ڕێسپشن</div>
+            </td>
+          </tr>
+        </table>
+
       </div>
     </div>
   </div>
 
-  <!-- ADD SERVICE MODAL -->
-  <div id="addServiceModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden justify-center items-center p-4 z-[60]">
-    <div class="bg-white text-slate-800 rounded-xl p-4 max-w-sm w-full shadow-2xl border border-gray-200 space-y-3">
-      <div class="flex justify-between items-center border-b pb-1.5">
-        <h3 class="text-xs font-bold text-blue-900">تۆمارکردنی جۆری خزمەتگوزاری نوێ</h3>
-        <button onclick="closeAddServiceModal()" class="text-gray-500 hover:text-red-600 font-bold text-sm">✕</button>
+  <!-- POPUP MODAL FOR ADDING ROOM -->
+  <div id="roomModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden justify-center items-center p-2 z-[60]">
+    <div class="bg-white text-slate-800 rounded-lg p-4 max-w-sm w-full shadow-2xl space-y-3">
+      <div class="flex justify-between items-center border-b pb-1">
+        <h4 id="roomModalTitle" class="font-bold text-amber-900 text-xs">تۆمارکردنی ژووری نوێ</h4>
+        <button onclick="closeRoomModal()" class="text-gray-500 hover:text-red-600 font-bold">✕</button>
       </div>
-      <form id="newServiceForm" onsubmit="saveNewServiceMaster(event)" class="space-y-2 text-xs">
+      <input type="hidden" id="editRoomIndex" value="-1">
+      <div class="space-y-2 text-xs">
         <div>
-          <label class="block font-bold text-gray-700 mb-0.5">بە کوردی (add_service_kurdi) *</label>
-          <input type="text" id="master_kurdi" required placeholder="ناوی کوردی..." class="w-full bg-slate-50 border border-gray-300 rounded p-1.5">
-        </div>
-        <div>
-          <label class="block font-bold text-gray-700 mb-0.5">بە عەرەبی (add_service_arabi)</label>
-          <input type="text" id="master_arabi" placeholder="الاسم بالعربي..." class="w-full bg-slate-50 border border-gray-300 rounded p-1.5">
+          <label class="block font-bold text-gray-700 mb-0.5" id="lbl_r_popup_num">ژمارەی ژوور (101-309) *</label>
+          <input type="number" id="popupRoomNum" placeholder="بۆ نموونە: 101" class="w-full border rounded p-1 font-mono">
         </div>
         <div>
-          <label class="block font-bold text-gray-700 mb-0.5">بە ئینگلیزی (add_service_english)</label>
-          <input type="text" id="master_english" placeholder="English name..." class="w-full bg-slate-50 border border-gray-300 rounded p-1.5" dir="ltr">
+          <label class="block font-bold text-gray-700 mb-0.5" id="lbl_r_popup_code">کۆدی حجز</label>
+          <input type="number" id="popupRoomCode" placeholder="کۆد..." class="w-full border rounded p-1 font-mono">
         </div>
-        <div class="flex gap-2 pt-2 border-t">
-          <button type="submit" class="flex-1 bg-blue-700 hover:bg-blue-800 text-white font-bold py-1.5 rounded shadow text-xs">پاشەکەوت کردن</button>
-          <button type="button" onclick="closeAddServiceModal()" class="bg-gray-400 hover:bg-gray-500 text-white px-3 py-1.5 rounded text-xs">پاشگەزبوونەوە</button>
+        <div>
+          <label class="block font-bold text-gray-700 mb-0.5" id="lbl_r_popup_guests">ژمارەی میوان</label>
+          <input type="number" id="popupRoomGuests" value="1" min="1" class="w-full border rounded p-1 font-mono">
         </div>
-      </form>
+        <div>
+          <label class="block font-bold text-gray-700 mb-0.5" id="lbl_r_popup_price">نرخ *</label>
+          <input type="number" id="popupRoomPrice" placeholder="نرخ..." class="w-full border rounded p-1 font-mono">
+        </div>
+      </div>
+      <div class="flex justify-end gap-2 pt-2 border-t">
+        <button type="button" onclick="closeRoomModal()" id="lbl_r_popup_close" class="bg-gray-400 text-white px-3 py-1 rounded">داخستن</button>
+        <button type="button" onclick="saveRoomPopup()" id="lbl_r_popup_add" class="bg-emerald-600 text-white px-4 py-1 rounded font-bold">زیادکردن</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- POPUP MODAL FOR ADDING SERVICE -->
+  <div id="serviceModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm hidden justify-center items-center p-2 z-[60]">
+    <div class="bg-white text-slate-800 rounded-lg p-4 max-w-sm w-full shadow-2xl space-y-3">
+      <div class="flex justify-between items-center border-b pb-1">
+        <h4 id="serviceModalTitle" class="font-bold text-orange-900 text-xs">تۆمارکردنی خزمەتگوزاری نوێ</h4>
+        <button onclick="closeServiceModal()" class="text-gray-500 hover:text-red-600 font-bold">✕</button>
+      </div>
+      <input type="hidden" id="editServiceIndex" value="-1">
+      <div class="space-y-2 text-xs">
+        <div>
+          <label class="block font-bold text-gray-700 mb-0.5" id="lbl_s_popup_type">جۆری خزمەتگوزاری *</label>
+          <input type="text" id="popupServType" placeholder="چێشتخانە، لوندری..." class="w-full border rounded p-1">
+        </div>
+        <div>
+          <label class="block font-bold text-gray-700 mb-0.5" id="lbl_s_popup_qty">دانە (Qty) *</label>
+          <input type="number" id="popupServQty" value="1" min="1" class="w-full border rounded p-1 font-mono">
+        </div>
+        <div>
+          <label class="block font-bold text-gray-700 mb-0.5" id="lbl_s_popup_price">نرخ *</label>
+          <input type="number" id="popupServPrice" placeholder="نرخ..." class="w-full border rounded p-1 font-mono">
+        </div>
+      </div>
+      <div class="flex justify-end gap-2 pt-2 border-t">
+        <button type="button" onclick="closeServiceModal()" id="lbl_s_popup_close" class="bg-gray-400 text-white px-3 py-1 rounded">داخستن</button>
+        <button type="button" onclick="saveServicePopup()" id="lbl_s_popup_add" class="bg-orange-600 text-white px-4 py-1 rounded font-bold">زیادکردن</button>
+      </div>
     </div>
   </div>
 
@@ -359,40 +528,523 @@
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
     let invoicesList = [];
-    let servicesMasterList = [];
     let numericNightsValue = 1;
+    let roomsDataList = [];
+    let servicesDataList = [];
+    let currentGlobalLang = 'ku';
+
+    // TRANSLATION DICTIONARY FOR THE ENTIRE PAGE
+    const translations = {
+      ku: {
+        pageTitle: "وەصلەکان - هوتێل جیلا",
+        topBrand: "هوتێل جیلا - Jilla Hotel",
+        langLabel: "زمان / Language:",
+        backBtn: "گەڕانەوە بۆ سەرەکی",
+        tableTitle: "لیستی وەصلە تۆمارکراوەکان",
+        searchPlaceholder: "گەڕان (ناو، ژ.وەصل، کۆمپانیا)...",
+        newInvoiceBtn: "+ تۆمارکردنی وەصلی نوێ",
+        thActions: "کردارەکان",
+        thInvNo: "ڕەقەم وەصل",
+        thGuestName: "ناوی وەرگری وەصل",
+        thCompany: "کۆمپانیا/فەرمانگە",
+        thEmailPhone: "ئیمەیل / تەلەفۆن",
+        loadingText: "چاوەڕوانبن، داتا دەهێنرێت...",
+        footerSys: "Jilla Hotel Management System",
+        // Modal Form
+        modalTitleNew: "تۆمارکردنی وەصلی نوێ",
+        f_invNo: "ڕەقەم وەصل *",
+        f_guestName: "ناوی وەرگری وەصل *",
+        f_company: "کۆمپانیا / فەرمانگە",
+        f_arrival: "بەرواری هاتن *",
+        f_departure: "بەرواری دەرچوون *",
+        f_nights: "شەو",
+        f_email: "ئیمەیل / تەلەفۆن",
+        f_doc: "دۆکیومێنت *",
+        opt_selectDoc: "هەڵبژێرە...",
+        opt_doc1: "مۆڵەتی شوفێرى",
+        opt_doc2: "پاسەپۆرت",
+        opt_doc3: "نفوس",
+        opt_doc4: "کارتی زانیاری",
+        opt_doc5: "کارتی نیشتیمانی",
+        opt_doc6: "هیتر",
+        f_docNo: "ژمارەی ناسنامە",
+        f_reception: "ڕێسپشن *",
+        s_rooms: "ژوورەکان",
+        addRoomBtn: "+ ژوور",
+        th_r_action: "کردار",
+        th_r_num: "ژمارەی ژوور",
+        th_r_code: "کۆدی حجز",
+        th_r_guests: "میوان",
+        th_r_price: "نرخ",
+        s_services: "خزمەتگوزاریەکان",
+        addServBtn: "+ خزمەتگوزاری",
+        th_s_action: "کردار",
+        th_s_type: "جۆری خزمەتگوزاری",
+        th_s_qty: "دانە",
+        th_s_price: "نرخ",
+        th_s_total: "کۆی گشتی",
+        m_print: "پرێنت کردن",
+        m_close: "داخستن",
+        m_delete: "سڕینەوە",
+        saveBtn: "تۆمارکردنی هەمووی",
+        // Table buttons inside list
+        btnEdit: "دەستکاری",
+        btnPrint: "پرێنت",
+        btnDelete: "سڕینەوە",
+        // Room modal popup
+        roomModalTitleNew: "تۆمارکردنی ژووری نوێ",
+        roomModalTitleEdit: "دەستکاریکردنی ژوور",
+        r_popup_num: "ژمارەی ژوور (101-309) *",
+        r_popup_code: "کۆدی حجز",
+        r_popup_guests: "ژمارەی میوان",
+        r_popup_price: "نرخ *",
+        r_popup_close: "داخستن",
+        r_popup_add: "زیادکردن",
+        // Service modal popup
+        servModalTitleNew: "تۆمارکردنی خزمەتگوزاری نوێ",
+        servModalTitleEdit: "دەستکاریکردنی خزمەتگوزاری",
+        s_popup_type: "جۆری خزمەتگوزاری *",
+        s_popup_qty: "دانە (Qty) *",
+        s_popup_price: "نرخ *",
+        s_popup_close: "داخستن",
+        s_popup_add: "زیادکردن",
+        // Confirm modal
+        confTitle: "ئاگاداری سڕینەوە",
+        confCancel: "پەشیمانبوونەوە",
+        confOk: "بەڵێ، بسڕەوە"
+      },
+      ar: {
+        pageTitle: "الإيصالات - فندق جيلا",
+        topBrand: "فندق جيلا - Jilla Hotel",
+        langLabel: "اللغة / Language:",
+        backBtn: "العودة للرئيسية",
+        tableTitle: "قائمة الإيصالات المسجلة",
+        searchPlaceholder: "بحث (الاسم، رقم الإيصال، الشركة)...",
+        newInvoiceBtn: "+ تسجيل إيصال جديد",
+        thActions: "الإجراءات",
+        thInvNo: "رقم الإيصال",
+        thGuestName: "اسم المستلم",
+        thCompany: "الشركة / الدائرة",
+        thEmailPhone: "البريد / الهاتف",
+        loadingText: "جلب البيانات، يرجى الانتظار...",
+        footerSys: "Jilla Hotel Management System",
+        // Modal Form
+        modalTitleNew: "تسجيل إيصال جديد",
+        f_invNo: "رقم الإيصال *",
+        f_guestName: "اسم المستلم *",
+        f_company: "الشركة / الدائرة",
+        f_arrival: "تاريخ الوصول *",
+        f_departure: "تاريخ المغادرة *",
+        f_nights: "ليالي",
+        f_email: "البريد / الهاتف",
+        f_doc: "المستند *",
+        opt_selectDoc: "اختر...",
+        opt_doc1: "رخصة قيادة",
+        opt_doc2: "جواز سفر",
+        opt_doc3: "هوية الأحوال",
+        opt_doc4: "بطاقة المعلومات",
+        opt_doc5: "البطاقة الوطنية",
+        opt_doc6: "أخرى",
+        f_docNo: "رقم الهوية",
+        f_reception: "الاستقبال *",
+        s_rooms: "الغرف",
+        addRoomBtn: "+ غرفة",
+        th_r_action: "إجراء",
+        th_r_num: "رقم الغرفة",
+        th_r_code: "رمز الحجز",
+        th_r_guests: "ضيوف",
+        th_r_price: "السعر",
+        s_services: "الخدمات",
+        addServBtn: "+ خدمة",
+        th_s_action: "إجراء",
+        th_s_type: "نوع الخدمة",
+        th_s_qty: "العدد",
+        th_s_price: "السعر",
+        th_s_total: "المجموع",
+        m_print: "طباعة",
+        m_close: "إغلاق",
+        m_delete: "حذف",
+        saveBtn: "حفظ الكل",
+        // Table buttons inside list
+        btnEdit: "تعديل",
+        btnPrint: "طباعة",
+        btnDelete: "حذف",
+        // Room modal popup
+        roomModalTitleNew: "تسجيل غرفة جديدة",
+        roomModalTitleEdit: "تعديل الغرفة",
+        r_popup_num: "رقم الغرفة (101-309) *",
+        r_popup_code: "رمز الحجز",
+        r_popup_guests: "عدد الضيوف",
+        r_popup_price: "السعر *",
+        r_popup_close: "إغلاق",
+        r_popup_add: "إضافة",
+        // Service modal popup
+        servModalTitleNew: "تسجيل خدمة جديدة",
+        servModalTitleEdit: "تعديل الخدمة",
+        s_popup_type: "نوع الخدمة *",
+        s_popup_qty: "العدد (Qty) *",
+        s_popup_price: "السعر *",
+        s_popup_close: "إغلاق",
+        s_popup_add: "إضافة",
+        // Confirm modal
+        confTitle: "تأكيد الحذف",
+        confCancel: "تراجع",
+        confOk: "نعم، احذف"
+      },
+      en: {
+        pageTitle: "Invoices - Jilla Hotel",
+        topBrand: "JILLA HOTEL",
+        langLabel: "Language / زمان:",
+        backBtn: "Back to Home",
+        tableTitle: "Recorded Invoices List",
+        searchPlaceholder: "Search (Name, Inv No, Company)...",
+        newInvoiceBtn: "+ New Invoice",
+        thActions: "Actions",
+        thInvNo: "Invoice No",
+        thGuestName: "Guest Name",
+        thCompany: "Company / Dept",
+        thEmailPhone: "Email / Phone",
+        loadingText: "Loading data, please wait...",
+        footerSys: "Jilla Hotel Management System",
+        // Modal Form
+        modalTitleNew: "New Invoice Registration",
+        f_invNo: "Invoice No *",
+        f_guestName: "Guest Name *",
+        f_company: "Company / Dept",
+        f_arrival: "Check-in Date *",
+        f_departure: "Check-out Date *",
+        f_nights: "Nights",
+        f_email: "Email / Phone",
+        f_doc: "Document *",
+        opt_selectDoc: "Select...",
+        opt_doc1: "Driving License",
+        opt_doc2: "Passport",
+        opt_doc3: "Civil ID",
+        opt_doc4: "Info Card",
+        opt_doc5: "National Card",
+        opt_doc6: "Other",
+        f_docNo: "Document No",
+        f_reception: "Reception *",
+        s_rooms: "Rooms",
+        addRoomBtn: "+ Room",
+        th_r_action: "Action",
+        th_r_num: "Room No",
+        th_r_code: "Booking Code",
+        th_r_guests: "Guests",
+        th_r_price: "Rate",
+        s_services: "Services",
+        addServBtn: "+ Service",
+        th_s_action: "Action",
+        th_s_type: "Service Type",
+        th_s_qty: "Q.T.Y",
+        th_s_price: "Rate",
+        th_s_total: "Total",
+        m_print: "Print",
+        m_close: "Close",
+        m_delete: "Delete",
+        saveBtn: "Save All",
+        // Table buttons inside list
+        btnEdit: "Edit",
+        btnPrint: "Print",
+        btnDelete: "Delete",
+        // Room modal popup
+        roomModalTitleNew: "New Room Registration",
+        roomModalTitleEdit: "Edit Room",
+        r_popup_num: "Room Number (101-309) *",
+        r_popup_code: "Booking Code",
+        r_popup_guests: "Number of Guests",
+        r_popup_price: "Price *",
+        r_popup_close: "Close",
+        r_popup_add: "Add",
+        // Service modal popup
+        servModalTitleNew: "New Service Registration",
+        servModalTitleEdit: "Edit Service",
+        s_popup_type: "Service Type *",
+        s_popup_qty: "Q.T.Y *",
+        s_popup_price: "Price *",
+        s_popup_close: "Close",
+        s_popup_add: "Add",
+        // Confirm modal
+        confTitle: "Delete Confirmation",
+        confCancel: "Cancel",
+        confOk: "Yes, Delete"
+      }
+    };
+
+    function changeGlobalLanguage(lang) {
+      currentGlobalLang = lang;
+      const t = translations[lang];
+      const root = document.getElementById('htmlRoot');
+      
+      root.setAttribute('lang', lang === 'en' ? 'en' : (lang === 'ar' ? 'ar' : 'ckb'));
+      root.setAttribute('dir', lang === 'en' ? 'ltr' : 'rtl');
+
+      // Update static UI elements
+      document.getElementById('pageTitle').innerText = t.pageTitle;
+      document.getElementById('lbl_topBrand').innerText = t.topBrand;
+      document.getElementById('lbl_langLabel').innerText = t.langLabel;
+      document.getElementById('lbl_backBtn').innerText = t.backBtn;
+      document.getElementById('lbl_tableTitle').innerText = t.tableTitle;
+      document.getElementById('searchInput').placeholder = t.searchPlaceholder;
+      document.getElementById('lbl_newInvoiceBtn').innerHTML = `<span>${t.newInvoiceBtn}</span>`;
+      
+      document.getElementById('th_actions').innerText = t.thActions;
+      document.getElementById('th_invNo').innerText = t.thInvNo;
+      document.getElementById('th_guestName').innerText = t.thGuestName;
+      document.getElementById('th_company').innerText = t.thCompany;
+      document.getElementById('th_emailPhone').innerText = t.thEmailPhone;
+      
+      const loadingEl = document.getElementById('lbl_loadingText');
+      if (loadingEl) loadingEl.innerText = t.loadingText;
+
+      document.getElementById('lbl_footerSys').innerText = t.footerSys;
+
+      // Form labels
+      document.getElementById('lbl_f_invNo').innerText = t.f_invNo;
+      document.getElementById('lbl_f_guestName').innerText = t.f_guestName;
+      document.getElementById('lbl_f_company').innerText = t.f_company;
+      document.getElementById('lbl_f_arrival').innerText = t.f_arrival;
+      document.getElementById('lbl_f_departure').innerText = t.f_departure;
+      document.getElementById('lbl_f_nights').innerText = t.f_nights;
+      document.getElementById('lbl_f_email').innerText = t.f_email;
+      document.getElementById('lbl_f_doc').innerText = t.f_doc;
+      
+      document.getElementById('opt_selectDoc').innerText = t.opt_selectDoc;
+      document.getElementById('opt_doc1').innerText = t.opt_doc1;
+      document.getElementById('opt_doc2').innerText = t.opt_doc2;
+      document.getElementById('opt_doc3').innerText = t.opt_doc3;
+      document.getElementById('opt_doc4').innerText = t.opt_doc4;
+      document.getElementById('opt_doc5').innerText = t.opt_doc5;
+      document.getElementById('opt_doc6').innerText = t.opt_doc6;
+
+      document.getElementById('lbl_f_docNo').innerText = t.f_docNo;
+      document.getElementById('lbl_f_reception').innerText = t.f_reception;
+
+      document.getElementById('lbl_s_rooms').innerText = t.s_rooms;
+      document.getElementById('lbl_addRoomBtn').innerText = t.addRoomBtn;
+      document.getElementById('th_r_action').innerText = t.th_r_action;
+      document.getElementById('th_r_num').innerText = t.th_r_num;
+      document.getElementById('th_r_code').innerText = t.th_r_code;
+      document.getElementById('th_r_guests').innerText = t.th_r_guests;
+      document.getElementById('th_r_price').innerText = t.th_r_price;
+
+      document.getElementById('lbl_s_services').innerText = t.s_services;
+      document.getElementById('lbl_addServBtn').innerText = t.addServBtn;
+      document.getElementById('th_s_action').innerText = t.th_s_action;
+      document.getElementById('th_s_type').innerText = t.th_s_type;
+      document.getElementById('th_s_qty').innerText = t.th_s_qty;
+      document.getElementById('th_s_price').innerText = t.th_s_price;
+      document.getElementById('th_s_total').innerText = t.th_s_total;
+
+      document.getElementById('lbl_m_print').innerText = t.m_print;
+      document.getElementById('lbl_m_close').innerText = t.m_close;
+      document.getElementById('saveBtn').innerText = t.saveBtn;
+      document.getElementById('modalDeleteBtn').innerText = t.m_delete;
+
+      // Popup modal elements
+      document.getElementById('lbl_r_popup_num').innerText = t.r_popup_num;
+      document.getElementById('lbl_r_popup_code').innerText = t.r_popup_code;
+      document.getElementById('lbl_r_popup_guests').innerText = t.r_popup_guests;
+      document.getElementById('lbl_r_popup_price').innerText = t.r_popup_price;
+      document.getElementById('lbl_r_popup_close').innerText = t.r_popup_close;
+      document.getElementById('lbl_r_popup_add').innerText = t.r_popup_add;
+
+      document.getElementById('lbl_s_popup_type').innerText = t.s_popup_type;
+      document.getElementById('lbl_s_popup_qty').innerText = t.s_popup_qty;
+      document.getElementById('lbl_s_popup_price').innerText = t.s_popup_price;
+      document.getElementById('lbl_s_popup_close').innerText = t.s_popup_close;
+      document.getElementById('lbl_s_popup_add').innerText = t.s_popup_add;
+
+      // Confirm modal
+      document.getElementById('confModalTitle').innerText = t.confTitle;
+      document.getElementById('confirmCancelBtn').innerText = t.confCancel;
+      document.getElementById('confirmOkBtn').innerText = t.confOk;
+
+      // Re-render table data to update dynamic button texts
+      filterInvoicesTable();
+    }
+
+    // Loading helper functions
+    function showLoading(text = "تکایە چاوەڕێ بە...") {
+      const overlay = document.getElementById('loadingOverlay');
+      const textEl = document.getElementById('loadingText');
+      textEl.innerText = text;
+      overlay.classList.remove('hidden');
+      overlay.classList.add('flex');
+    }
+
+    function hideLoading() {
+      const overlay = document.getElementById('loadingOverlay');
+      overlay.classList.add('hidden');
+      overlay.classList.remove('flex');
+    }
 
     window.addEventListener('DOMContentLoaded', async () => {
-      await fetchServicesMaster();
       await fetchInvoices();
     });
 
-    async function fetchServicesMaster() {
-      const { data, error } = await supabaseClient.from('2_tbl_add_service').select('*');
-      if (!error && data) servicesMasterList = data;
+    // Custom Modal Confirm Function (Promise based)
+    function showConfirmModal(message) {
+      return new Promise((resolve) => {
+        const modal = document.getElementById('confirmModal');
+        const msgEl = document.getElementById('confirmMessage');
+        const okBtn = document.getElementById('confirmOkBtn');
+        const cancelBtn = document.getElementById('confirmCancelBtn');
+
+        msgEl.innerText = message;
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+
+        const newOkBtn = okBtn.cloneNode(true);
+        const newCancelBtn = cancelBtn.cloneNode(true);
+        okBtn.parentNode.replaceChild(newOkBtn, okBtn);
+        cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
+
+        newOkBtn.addEventListener('click', () => {
+          modal.classList.add('hidden');
+          modal.classList.remove('flex');
+          resolve(true);
+        });
+
+        newCancelBtn.addEventListener('click', () => {
+          modal.classList.add('hidden');
+          modal.classList.remove('flex');
+          resolve(false);
+        });
+
+      });
+    }
+
+    // Auto Toast Notification Function
+    function showToast(message) {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      toast.className = "toast-alert bg-emerald-600 text-white font-bold text-xs px-4 py-2.5 rounded-lg shadow-xl border border-emerald-500 flex items-center gap-2";
+      toast.innerHTML = `<span>✅</span><span>${message}</span>`;
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.remove();
+      }, 2500);
+    }
+
+    // Kurdish Number to Words (Tafqeet) Converter Function
+    function numberToKurdishWords(num) {
+      if (isNaN(num) || num === 0) return 'صفر';
+      
+      const ones = ['', 'يەک', 'دوو', 'سێ', 'چوار', 'پێنج', 'شەش', 'حەوت', 'هەشت', 'نۆ'];
+      const teens = ['دە', 'یازدە', 'دوانزە', 'سیانزە', 'چواردە', 'پازدە', 'شازدە', 'حەڤدە', 'هەژدە', 'نۆزدە'];
+      const tens = ['', 'دە', 'بیست', 'سێست', 'چڵ', 'پەنجا', 'شێست', 'حەفتا', 'هەشتا', 'نوە'];
+      const hundreds = ['', 'سەد', 'دوو سەد', 'سێ سەد', 'چوار سەد', 'پێنج سەد', 'شەش سەد', 'حەوت سەد', 'هەشت سەد', 'نۆ سەد'];
+
+      function convertGroup(n) {
+        let str = '';
+        let h = Math.floor(n / 100);
+        let t = Math.floor((n % 100) / 10);
+        let o = n % 10;
+
+        if (h > 0) {
+          str += hundreds[h];
+        }
+
+        let rem = n % 100;
+        if (rem > 0) {
+          if (str !== '') str += ' و ';
+          if (rem < 10) {
+            str += ones[rem];
+          } else if (rem >= 10 && rem < 20) {
+            str += teens[rem - 10];
+          } else {
+            str += tens[t];
+            if (o > 0) {
+              str += ' و ' + ones[o];
+            }
+          }
+        }
+        return str;
+      }
+
+      let billion = Math.floor(num / 1000000000);
+      let million = Math.floor((num % 1000000000) / 1000000);
+      let thousand = Math.floor((num % 1000000) / 1000);
+      let remainder = num % 1000;
+
+      let result = [];
+
+      if (billion > 0) {
+        result.push(convertGroup(billion) + ' ملیار');
+      }
+      if (million > 0) {
+        result.push(convertGroup(million) + ' ملیۆن');
+      }
+      if (thousand > 0) {
+        result.push(convertGroup(thousand) + ' هەزار');
+      }
+      if (remainder > 0) {
+        result.push(convertGroup(remainder));
+      }
+
+      return result.join(' و ');
+    }
+
+    function formatDateWithDayName(dateStr) {
+      if (!dateStr) return '-';
+      const parts = dateStr.split('-');
+      if (parts.length !== 3) return dateStr;
+      
+      const dateObj = new Date(dateStr);
+      if (isNaN(dateObj)) return dateStr;
+
+      const formattedYMD = `${parts[0]}/${parts[1]}/${parts[2]}`;
+      const daysDict = ['یەکشەممە', 'دووشەممە', 'سێشەممە', 'چوارشەممە', 'پێنجشەممە', 'هەینی', 'شەممە'];
+      const dayIndex = dateObj.getDay();
+      const dayName = daysDict[dayIndex] || '';
+
+      return `${formattedYMD} (${dayName})`;
     }
 
     async function fetchInvoices() {
+      showLoading("تکایە چاوەڕێ بە...");
       try {
         const { data, error } = await supabaseClient
           .from('2_tbl_en_invoice_info')
           .select('*')
           .order('en_invoice_info_ID', { ascending: false });
 
-        if (error) return;
+        if (error) {
+          console.error("Fetch error:", error);
+          return;
+        }
+
         invoicesList = data || [];
-        renderInvoiceTable(invoicesList);
+        filterInvoicesTable();
       } catch (err) {
-        console.error(err);
+        console.error("Fetch exception:", err);
+      } finally {
+        hideLoading();
       }
+    }
+
+    function filterInvoicesTable() {
+      const query = document.getElementById('searchInput').value.trim().toLowerCase();
+      
+      const filtered = invoicesList.filter(item => {
+        const invoiceNo = (item.en_invoice_info_NO || '').toString().toLowerCase();
+        const guestName = (item.en_invoice_info_GuestsName || '').toLowerCase();
+        const company = (item.en_invoice_info_Company_travelagent || '').toLowerCase();
+
+        return invoiceNo.includes(query) || guestName.includes(query) || company.includes(query);
+      });
+
+      renderInvoiceTable(filtered);
     }
 
     function renderInvoiceTable(data) {
       const tbody = document.getElementById('invoiceTableBody');
-      document.getElementById('invoiceCount').innerText = `کۆی وەصلەکان: ${data.length}`;
+      const t = translations[currentGlobalLang];
+      document.getElementById('invoiceCount').innerText = `${currentGlobalLang === 'en' ? 'Total Invoices: ' : (currentGlobalLang === 'ar' ? 'مجموع الإيصالات: ' : 'کۆی وەصلەکان: ')} ${data.length}`;
 
       if (data.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="10" class="text-center py-4 text-gray-500">هیچ وەصلێک تۆمار نەکراوە.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-gray-500">${currentGlobalLang === 'en' ? 'No invoices found.' : (currentGlobalLang === 'ar' ? 'لم يتم العثور على أي إيصالات.' : 'هیچ وەصلێک نەدۆزراوەتەوە.')}</td></tr>`;
         return;
       }
 
@@ -402,27 +1054,19 @@
         const name = item.en_invoice_info_GuestsName || '-';
         const company = item.en_invoice_info_Company_travelagent || '-';
         const email = item.en_invoice_info_Email || '-';
-        const nights = item.en_invoice_info_TotalNaights ? `${item.en_invoice_info_TotalNaights} ڕۆژ` : '-';
-        const arrival = item.en_invoice_info_ArrivalDate || '-';
-        const departure = item.en_invoice_info_DepartureDate || '-';
-        const reception = item.en_invoice_info_reception || 'Jilla Hotel Administration';
 
         return `
           <tr class="hover:bg-gray-50 border-b border-gray-200 access-row">
-            <td class="access-cell border text-center space-x-1 space-x-reverse">
-              <button onclick="editInvoice(${id})" class="bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">دەستکاری</button>
-              <button onclick="deleteInvoice(${id}, '${no}')" class="bg-red-600 hover:bg-red-700 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">سڕینەوە</button>
-              <button onclick="printInvoice(${id})" class="bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">پرێنت</button>
+            <td class="access-cell border text-center space-x-1 space-x-reverse flex justify-center items-center gap-1">
+              <button onclick="editInvoice(${id})" class="bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">${t.btnEdit}</button>
+              <button onclick="openPrintModal(${id})" class="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">${t.btnPrint}</button>
+              <button onclick="deleteInvoice(${id}, '${no}', '${name}')" class="bg-red-600 hover:bg-red-700 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">${t.btnDelete}</button>
             </td>
-            <td class="access-cell border text-center font-mono font-bold text-gray-600">${id}</td>
-            <td class="access-cell border font-bold text-blue-900 font-mono">${no}</td>
+            <td class="access-cell border hidden">${id}</td>
+            <td class="access-cell border font-bold text-amber-900 font-mono">${no}</td>
             <td class="access-cell border font-bold text-gray-800">${name}</td>
             <td class="access-cell border">${company}</td>
             <td class="access-cell border font-mono text-[10px]">${email}</td>
-            <td class="access-cell border text-center font-bold text-blue-800">${nights}</td>
-            <td class="access-cell border text-center font-mono">${arrival}</td>
-            <td class="access-cell border text-center font-mono">${departure}</td>
-            <td class="access-cell border font-bold text-slate-700">${reception}</td>
           </tr>
         `;
       }).join('');
@@ -431,212 +1075,361 @@
     function calculateNightsForAll() {
       const arrVal = document.getElementById('en_invoice_info_ArrivalDate').value;
       const depVal = document.getElementById('en_invoice_info_DepartureDate').value;
+
       if (!arrVal || !depVal) return;
 
       const arrDate = new Date(arrVal);
       const depDate = new Date(depVal);
+
       if (!isNaN(arrDate) && !isNaN(depDate)) {
         const diffTime = depDate - arrDate;
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
         if (diffDays >= 0) {
           numericNightsValue = diffDays === 0 ? 1 : diffDays;
-          document.getElementById('en_invoice_info_TotalNaights').value = `${numericNightsValue} شەو`;
-          document.querySelectorAll('.room-row').forEach(row => {
-            calculateRoomTotal(row.querySelector('.room-price'));
-          });
+          const nightsTxt = currentGlobalLang === 'en' ? `${numericNightsValue} Nights` : (currentGlobalLang === 'ar' ? `${numericNightsValue} ليلة` : `${numericNightsValue} شەو`);
+          document.getElementById('en_invoice_info_TotalNaights').value = nightsTxt;
+          renderRoomsTable();
         }
       }
     }
 
     function formatNumber(num) {
-      if (!num && num !== 0) return '';
-      return num.toLocaleString('en-US');
+      if (!num && num !== 0) return '0';
+      const parsed = Number(num);
+      if (isNaN(parsed)) return '0';
+      return parsed.toLocaleString('en-US');
     }
 
-    function validateRoomNumber(input) {
-      const val = parseInt(input.value);
-      if (!isNaN(val)) {
-        const isValid = (val >= 101 && val <= 109) || (val >= 201 && val <= 209) || (val >= 301 && val <= 309);
-        if (!isValid) {
-          input.setCustomValidity("ژووری نەگونجاو! تەنها 101-109، 201-209 و 301-309 هەیە.");
-          input.reportValidity();
+    function detectCurrency(price) {
+      if (price === 250 || price === 500 || price === 750) return 'دیناری عێراقی';
+      return (price >= 1000 || (price % 1000 === 0 && price !== 0)) ? 'دیناری عێراقی' : 'دۆلار';
+    }
+
+    function openRoomModal(index = -1) {
+      document.getElementById('editRoomIndex').value = index;
+      const t = translations[currentGlobalLang];
+      if (index > -1) {
+        const room = roomsDataList[index];
+        document.getElementById('popupRoomNum').value = room.en_invoice_room_roomnumber;
+        document.getElementById('popupRoomCode').value = room.en_invoice_room_bookingcdde || '';
+        document.getElementById('popupRoomGuests').value = room.en_invoice_room_nof_guests || 1;
+        document.getElementById('popupRoomPrice').value = room.en_invoice_room_price;
+        document.getElementById('roomModalTitle').innerText = t.roomModalTitleEdit;
+      } else {
+        document.getElementById('popupRoomNum').value = '';
+        document.getElementById('popupRoomCode').value = '';
+        document.getElementById('popupRoomGuests').value = '1';
+        document.getElementById('popupRoomPrice').value = '';
+        document.getElementById('roomModalTitle').innerText = t.roomModalTitleNew;
+      }
+      document.getElementById('roomModal').classList.remove('hidden');
+      document.getElementById('roomModal').classList.add('flex');
+    }
+
+    function closeRoomModal() {
+      document.getElementById('roomModal').classList.add('hidden');
+      document.getElementById('roomModal').classList.remove('flex');
+    }
+
+    async function saveRoomPopup() {
+      const editIndex = parseInt(document.getElementById('editRoomIndex').value);
+      const roomNum = parseInt(document.getElementById('popupRoomNum').value);
+      const bookingCode = document.getElementById('popupRoomCode').value;
+      const guests = parseInt(document.getElementById('popupRoomGuests').value) || 1;
+      const price = parseFloat(document.getElementById('popupRoomPrice').value);
+
+      const isValid = (roomNum >= 101 && roomNum <= 109) || (roomNum >= 201 && roomNum <= 209) || (roomNum >= 301 && roomNum <= 309);
+      if (!isValid) {
+        alert("ژووری نەگونجاو! تەنها 101-109، 201-209 و 301-309 هەیە.");
+        return;
+      }
+      if (isNaN(price)) {
+        alert("تکایە نرخ بنووسە!");
+        return;
+      }
+
+      const currentInvoiceId = document.getElementById('editInvoiceId').value;
+      if (!currentInvoiceId) {
+        alert("تکایە سەرەتا زانیارییە سەرەکییەکان بنووسە و خەزن بکە.");
+        return;
+      }
+
+      const roomObj = {
+        invoice_id: parseInt(currentInvoiceId),
+        en_invoice_room_roomnumber: roomNum,
+        en_invoice_room_bookingcdde: bookingCode ? parseFloat(bookingCode) : 0,
+        en_invoice_room_nof_guests: guests,
+        en_invoice_room_price: price,
+        en_invoice_room_price_type: detectCurrency(price)
+      };
+
+      showLoading("چاوەڕێ بە، داتا خەزن دەکرێت...");
+      try {
+        if (editIndex > -1) {
+          const existingRoom = roomsDataList[editIndex];
+          if (existingRoom.en_invoice_room_ID) {
+            await supabaseClient
+              .from('2_tbl_en_invoice_room')
+              .update(roomObj)
+              .eq('en_invoice_room_ID', existingRoom.en_invoice_room_ID);
+          }
         } else {
-          input.setCustomValidity("");
+          const { data } = await supabaseClient
+            .from('2_tbl_en_invoice_room')
+            .insert([roomObj])
+            .select();
+          if (data && data.length > 0) {
+            roomObj.en_invoice_room_ID = data[0].en_invoice_room_ID;
+          }
+        }
+
+        const { data: refreshedRooms } = await supabaseClient
+          .from('2_tbl_en_invoice_room')
+          .select('*')
+          .eq('invoice_id', currentInvoiceId);
+        
+        roomsDataList = refreshedRooms || [];
+        closeRoomModal();
+        renderRoomsTable();
+        showToast('ژوورەکە سەرکەوتووانە پاشەکەوت کرا!');
+      } finally {
+        hideLoading();
+      }
+    }
+
+    async function removeRoomItem(index) {
+      const roomToRemove = roomsDataList[index];
+      const confirmed = await showConfirmModal(`ئایا دڵنیایت لە سڕینەوەی ژووری ژمارە (${roomToRemove.en_invoice_room_roomnumber})؟`);
+      if (confirmed) {
+        showLoading("تکایە چاوەڕێ بە...");
+        try {
+          if (roomToRemove.en_invoice_room_ID) {
+            await supabaseClient
+              .from('2_tbl_en_invoice_room')
+              .delete()
+              .eq('en_invoice_room_ID', roomToRemove.en_invoice_room_ID);
+          }
+          roomsDataList.splice(index, 1);
+          renderRoomsTable();
+          showToast('ژوورەکە سەرکەوتووانە سڕایەوە!');
+        } finally {
+          hideLoading();
         }
       }
     }
 
-    function detectCurrency(price) {
-      return (price >= 1000 || (price % 1000 === 0 && price !== 0)) ? 'دینار' : 'دۆلار';
-    }
-
-    function addRoomRow(data = {}) {
+    function renderRoomsTable() {
       const container = document.getElementById('roomsContainer');
-      const tr = document.createElement('tr');
-      tr.className = "room-row border-b";
+      if (roomsDataList.length === 0) {
+        container.innerHTML = `<tr><td colspan="5" class="text-center py-2 text-gray-400">هیچ ژوورێک زیاد نەکراوە.</td></tr>`;
+        document.getElementById('roomsSummaryText').innerText = `کۆی گشتی 0 ژوور بە بڕی 0`;
+        return;
+      }
 
-      const nights = numericNightsValue || 1;
-      const price = data.en_invoice_room_price || '';
-      const total = price ? (price * nights) : '';
-      const currency = price ? detectCurrency(price) : (data.en_invoice_room_price_type || 'دۆلار');
-
-      tr.innerHTML = `
-        <td class="p-1 border text-center">
-          <button type="button" onclick="this.closest('tr').remove(); calculateRoomsGrandTotal();" class="bg-red-500 hover:bg-red-600 text-white font-bold w-5 h-5 rounded">✕</button>
-        </td>
-        <td class="p-1 border">
-          <input type="number" oninput="validateRoomNumber(this)" class="room-number w-full bg-slate-50 border border-gray-300 rounded p-1 font-mono font-bold text-center" value="${data.en_invoice_room_roomnumber || ''}" placeholder="101">
-        </td>
-        <td class="p-1 border">
-          <input type="number" class="room-booking-code w-full bg-slate-50 border border-gray-300 rounded p-1 font-mono text-center" value="${data.en_invoice_room_bookingcdde || ''}" placeholder="کۆد...">
-        </td>
-        <td class="p-1 border">
-          <input type="number" class="room-guests w-full bg-slate-50 border border-gray-300 rounded p-1 text-center font-mono" value="${data.en_invoice_room_nof_guests || 1}" min="1" placeholder="1">
-        </td>
-        <td class="p-1 border">
-          <div class="flex gap-1 items-center">
-            <input type="number" oninput="calculateRoomTotal(this)" class="room-price w-20 bg-slate-50 border border-gray-300 rounded p-1 font-mono font-bold" value="${price}" placeholder="نرخ...">
-            <input type="text" readonly class="room-total w-28 bg-gray-100 border border-gray-200 rounded p-1 font-mono font-bold text-emerald-700 text-left" value="${total ? formatNumber(total) + ' ' + currency : ''}">
-            <input type="hidden" class="room-price-type" value="${currency}">
-          </div>
-        </td>
-      `;
-      container.appendChild(tr);
-      calculateRoomsGrandTotal();
-    }
-
-    function calculateRoomTotal(input) {
-      const row = input.closest('tr') || input;
-      const price = parseFloat(row.querySelector('.room-price').value) || 0;
-      const nights = numericNightsValue || 1;
-      const total = price * nights;
-      const currency = detectCurrency(price);
-      row.querySelector('.room-price-type').value = currency;
-      row.querySelector('.room-total').value = total ? formatNumber(total) + ' ' + currency : '';
-      calculateRoomsGrandTotal();
-    }
-
-    function calculateRoomsGrandTotal() {
       let sumUSD = 0;
       let sumIQD = 0;
-      document.querySelectorAll('.room-row').forEach(row => {
-        const price = parseFloat(row.querySelector('.room-price').value) || 0;
-        const nights = numericNightsValue || 1;
-        const total = price * nights;
-        const curr = row.querySelector('.room-price-type').value;
-        if (curr === 'دینار') sumIQD += total;
+
+      container.innerHTML = roomsDataList.map((room, idx) => {
+        const total = room.en_invoice_room_price * numericNightsValue;
+        if (room.en_invoice_room_price_type === 'دیناری عێراقی') sumIQD += total;
         else sumUSD += total;
-      });
+
+        return `
+          <tr class="border-b">
+            <td class="p-1.5 border text-center whitespace-nowrap">
+              <div class="inline-flex items-center gap-1">
+                <button type="button" onclick="openRoomModal(${idx})" class="bg-amber-500 hover:bg-amber-600 text-white font-bold px-1.5 py-0.5 rounded text-[10px]">✏️</button>
+                <button type="button" onclick="removeRoomItem(${idx})" class="bg-red-500 hover:bg-red-600 text-white font-bold px-1.5 py-0.5 rounded text-[10px]">✕</button>
+              </div>
+            </td>
+            <td class="p-1.5 border font-mono font-bold text-center">${room.en_invoice_room_roomnumber}</td>
+            <td class="p-1.5 border font-mono text-center">${room.en_invoice_room_bookingcdde || '-'}</td>
+            <td class="p-1.5 border text-center font-mono">${room.en_invoice_room_nof_guests || 1}</td>
+            <td class="p-1.5 border font-mono font-bold text-emerald-700">${formatNumber(room.en_invoice_room_price)} ${room.en_invoice_room_price_type === 'دیناری عێراقی' ? 'دیناری عێراقی' : 'دۆلار'}</td>
+          </tr>
+        `;
+      }).join('');
+
       let text = [];
-      if (sumUSD > 0) text.push(`${formatNumber(sumUSD)} $`);
-      if (sumIQD > 0) text.push(`${formatNumber(sumIQD)} دینار`);
-      document.getElementById('roomsGrandTotal').innerText = text.length > 0 ? text.join(' + ') : '0';
+      if (sumUSD > 0) text.push(`${formatNumber(sumUSD)} دۆلار`);
+      if (sumIQD > 0) text.push(`${formatNumber(sumIQD)} دیناری عێراقی`);
+      const totalStr = text.length > 0 ? text.join(' + ') : '0';
+      document.getElementById('roomsSummaryText').innerText = `کۆی گشتی بریتییە لە ${roomsDataList.length} ژوور دەکاتە بڕی ${totalStr}`;
     }
 
-    function addServiceRow(data = {}) {
-      const container = document.getElementById('servicesContainer');
-      const tr = document.createElement('tr');
-      tr.className = "service-row border-b";
-
-      const price = data.service_price || '';
-      const qty = data.service_qty || 1;
-      const total = price ? (qty * price) : '';
-      const currency = price ? detectCurrency(price) : (data.service_price_type || 'دۆلار');
-
-      tr.innerHTML = `
-        <td class="p-1 border text-center">
-          <button type="button" onclick="this.closest('tr').remove(); calculateServicesGrandTotal();" class="bg-red-500 hover:bg-red-600 text-white font-bold w-5 h-5 rounded">✕</button>
-        </td>
-        <td class="p-1 border">
-          <select onchange="onServiceSelect(this)" class="serv-type w-full bg-slate-50 border border-gray-300 rounded p-1">
-            ${getServiceOptionsHtml(data.service_type)}
-          </select>
-          <input type="hidden" class="serv-type-kurdi" value="${data.service_type || ''}">
-          <input type="hidden" class="serv-type-arabi" value="${data.service_type_arabi || ''}">
-          <input type="hidden" class="serv-type-english" value="${data.service_type_english || ''}">
-        </td>
-        <td class="p-1 border">
-          <input type="number" oninput="calculateServiceTotal(this)" class="serv-qty w-full bg-slate-50 border border-gray-300 rounded p-1 text-center font-mono" value="${qty}" min="1">
-        </td>
-        <td class="p-1 border">
-          <div class="flex gap-1 items-center">
-            <input type="number" oninput="calculateServiceTotal(this)" class="serv-price w-20 bg-slate-50 border border-gray-300 rounded p-1 font-mono font-bold" value="${price}" placeholder="نرخ...">
-            <input type="text" readonly class="serv-total w-28 bg-gray-100 border border-gray-200 rounded p-1 font-mono font-bold text-emerald-700 text-left" value="${total ? formatNumber(total) + ' ' + currency : ''}">
-            <input type="hidden" class="serv-price-type" value="${currency}">
-          </div>
-        </td>
-      `;
-      container.appendChild(tr);
-      calculateServicesGrandTotal();
+    function openServiceModal(index = -1) {
+      document.getElementById('editServiceIndex').value = index;
+      const t = translations[currentGlobalLang];
+      if (index > -1) {
+        const serv = servicesDataList[index];
+        document.getElementById('popupServType').value = serv.service_type;
+        document.getElementById('popupServQty').value = serv.service_qty || 1;
+        document.getElementById('popupServPrice').value = serv.service_price;
+        document.getElementById('serviceModalTitle').innerText = t.servModalTitleEdit;
+      } else {
+        document.getElementById('popupServType').value = '';
+        document.getElementById('popupServQty').value = '1';
+        document.getElementById('popupServPrice').value = '';
+        document.getElementById('serviceModalTitle').innerText = t.servModalTitleNew;
+      }
+      document.getElementById('serviceModal').classList.remove('hidden');
+      document.getElementById('serviceModal').classList.add('flex');
     }
 
-    function getServiceOptionsHtml(selectedVal = '') {
-      let html = `<option value="">هەڵبژێرە...</option>`;
-      servicesMasterList.forEach(s => {
-        const sel = (s.add_service_kurdi === selectedVal || s.add_service_arabi === selectedVal || s.add_service_english === selectedVal) ? 'selected' : '';
-        html += `<option value="${s.add_service_kurdi}" data-kurdi="${s.add_service_kurdi || ''}" data-arabi="${s.add_service_arabi || ''}" data-english="${s.add_service_english || ''}" ${sel}>${s.add_service_kurdi} (${s.add_service_arabi || ''} - ${s.add_service_english || ''})</option>`;
-      });
-      return html;
+    function closeServiceModal() {
+      document.getElementById('serviceModal').classList.add('hidden');
+      document.getElementById('serviceModal').classList.remove('flex');
     }
 
-    function refreshAllServiceDropdowns() {
-      document.querySelectorAll('.serv-type').forEach(select => {
-        const currentVal = select.value;
-        select.innerHTML = getServiceOptionsHtml(currentVal);
-      });
-    }
+    async function saveServicePopup() {
+      const editIndex = parseInt(document.getElementById('editServiceIndex').value);
+      const type = document.getElementById('popupServType').value.trim();
+      const qty = parseInt(document.getElementById('popupServQty').value) || 1;
+      const price = parseFloat(document.getElementById('popupServPrice').value);
 
-    function onServiceSelect(select) {
-      const selectedOpt = select.options[select.selectedIndex];
-      const row = select.closest('tr');
-      if (selectedOpt && selectedOpt.value) {
-        row.querySelector('.serv-type-kurdi').value = selectedOpt.getAttribute('data-kurdi') || '';
-        row.querySelector('.serv-type-arabi').value = selectedOpt.getAttribute('data-arabi') || '';
-        row.querySelector('.serv-type-english').value = selectedOpt.getAttribute('data-english') || '';
+      if (!type) {
+        alert("تکایە جۆری خزمەتگوزاری بنووسە!");
+        return;
+      }
+      if (isNaN(price)) {
+        alert("تکایە نرخ بنووسە!");
+        return;
+      }
+
+      const currentInvoiceId = document.getElementById('editInvoiceId').value;
+      if (!currentInvoiceId) {
+        alert("تکایە سەرەتا زانیارییە سەرەکییەکان بنووسە و خەزن بکە.");
+        return;
+      }
+
+      const servObj = {
+        invoice_id: parseInt(currentInvoiceId),
+        service_type: type,
+        service_qty: qty,
+        service_price: price,
+        service_total: price * qty,
+        service_price_type: detectCurrency(price)
+      };
+
+      showLoading("چاوەڕێ بە، داتا خەزن دەکرێت...");
+      try {
+        if (editIndex > -1) {
+          const existingServ = servicesDataList[editIndex];
+          const recordId = existingServ.service_ID || existingServ.Service_ID || existingServ.service_id || existingServ.id;
+          
+          if (recordId) {
+            for (let idCol of ['service_ID', 'Service_ID', 'service_id', 'id']) {
+              await supabaseClient
+                .from('2_tbl_room_services')
+                .update(servObj)
+                .eq(idCol, recordId);
+            }
+          }
+        } else {
+          await supabaseClient
+            .from('2_tbl_room_services')
+            .insert([servObj]);
+        }
+
+        const { data: refreshedServices } = await supabaseClient
+          .from('2_tbl_room_services')
+          .select('*')
+          .eq('invoice_id', currentInvoiceId);
+
+        servicesDataList = refreshedServices || [];
+        closeServiceModal();
+        renderServicesTable();
+        showToast('خزمەتگوزارییەکە سەرکەوتووانە پاشەکەوت کرا!');
+      } finally {
+        hideLoading();
       }
     }
 
-    function calculateServiceTotal(input) {
-      const row = input.closest('tr');
-      const qty = parseFloat(row.querySelector('.serv-qty').value) || 0;
-      const price = parseFloat(row.querySelector('.serv-price').value) || 0;
-      const total = qty * price;
-      const currency = detectCurrency(price);
-      row.querySelector('.serv-price-type').value = currency;
-      row.querySelector('.serv-total').value = total ? formatNumber(total) + ' ' + currency : '';
-      calculateServicesGrandTotal();
+    async function removeServiceItem(index) {
+      const servToRemove = servicesDataList[index];
+      if (!servToRemove) return;
+
+      const recordId = servToRemove.service_ID || servToRemove.Service_ID || servToRemove.service_id || servToRemove.id;
+      const confirmed = await showConfirmModal(`ئایا دڵنیایت لە سڕینەوەی خزمەتگوزاری (${servToRemove.service_type})؟`);
+      
+      if (confirmed) {
+        showLoading("تکایە چاوەڕێ بە...");
+        try {
+          if (recordId) {
+            for (let idCol of ['service_ID', 'Service_ID', 'service_id', 'id']) {
+              await supabaseClient
+                .from('2_tbl_room_services')
+                .delete()
+                .eq(idCol, recordId);
+            }
+          }
+          
+          servicesDataList.splice(index, 1);
+          renderServicesTable();
+          showToast('خزمەتگوزارییەکە سەرکەوتووانە سڕایەوە!');
+        } finally {
+          hideLoading();
+        }
+      }
     }
 
-    function calculateServicesGrandTotal() {
+    function renderServicesTable() {
+      const container = document.getElementById('servicesContainer');
+      if (servicesDataList.length === 0) {
+        container.innerHTML = `<tr><td colspan="5" class="text-center py-2 text-gray-400">هیچ خزمەتگوزارییەک زیاد نەکراوە.</td></tr>`;
+        document.getElementById('servicesSummaryText').innerText = `کۆی گشتی خزمەتگوزاری دەکاتە بڕی 0`;
+        return;
+      }
+
       let sumUSD = 0;
       let sumIQD = 0;
-      document.querySelectorAll('.service-row').forEach(row => {
-        const qty = parseFloat(row.querySelector('.serv-qty').value) || 0;
-        const price = parseFloat(row.querySelector('.serv-price').value) || 0;
-        const total = qty * price;
-        const curr = row.querySelector('.serv-price-type').value;
-        if (curr === 'دینار') sumIQD += total;
+
+      container.innerHTML = servicesDataList.map((serv, idx) => {
+        const total = serv.service_total || (serv.service_price * serv.service_qty);
+        if (serv.service_price_type === 'دیناری عێراقی') sumIQD += total;
         else sumUSD += total;
-      });
+
+        return `
+          <tr class="border-b">
+            <td class="p-1.5 border text-center whitespace-nowrap">
+              <div class="inline-flex items-center gap-1">
+                <button type="button" onclick="openServiceModal(${idx})" class="bg-amber-500 hover:bg-amber-600 text-white font-bold px-1.5 py-0.5 rounded text-[10px]">✏️</button>
+                <button type="button" onclick="removeServiceItem(${idx})" class="bg-red-500 hover:bg-red-600 text-white font-bold px-1.5 py-0.5 rounded text-[10px]">✕</button>
+              </div>
+            </td>
+            <td class="p-1.5 border">${serv.service_type}</td>
+            <td class="p-1.5 border text-center font-mono">${serv.service_qty}</td>
+            <td class="p-1.5 border font-mono">${formatNumber(serv.service_price)} ${serv.service_price_type === 'دیناری عێراقی' ? 'دیناری عێراقی' : 'دۆلار'}</td>
+            <td class="p-1.5 border font-mono font-bold text-emerald-700">${formatNumber(total)} ${serv.service_price_type === 'دیناری عێراقی' ? 'دیناری عێراقی' : 'دۆلار'}</td>
+          </tr>
+        `;
+      }).join('');
+
       let text = [];
-      if (sumUSD > 0) text.push(`${formatNumber(sumUSD)} $`);
-      if (sumIQD > 0) text.push(`${formatNumber(sumIQD)} دینار`);
-      document.getElementById('servicesGrandTotal').innerText = text.length > 0 ? text.join(' + ') : '0';
+      if (sumUSD > 0) text.push(`${formatNumber(sumUSD)} دۆلار`);
+      if (sumIQD > 0) text.push(`${formatNumber(sumIQD)} دیناری عێراقی`);
+      const totalStr = text.length > 0 ? text.join(' + ') : '0';
+      document.getElementById('servicesSummaryText').innerText = `کۆی گشتی خزمەتگوزاری دەکاتە بڕی ${totalStr}`;
     }
 
     function openInvoiceModal() {
       document.getElementById('invoiceForm').reset();
       document.getElementById('editInvoiceId').value = '';
-      document.getElementById('roomsContainer').innerHTML = '';
-      document.getElementById('servicesContainer').innerHTML = '';
-      document.getElementById('en_invoice_info_reception').value = 'Jilla Hotel Administration';
+      document.getElementById('modalPrintBtn').classList.add('hidden');
+      document.getElementById('modalDeleteBtn').classList.add('hidden');
+      roomsDataList = [];
+      servicesDataList = [];
+      
       const today = new Date().toISOString().split('T')[0];
       document.getElementById('en_invoice_info_ArrivalDate').value = today;
       document.getElementById('en_invoice_info_DepartureDate').value = today;
       calculateNightsForAll();
-      addRoomRow();
-      addServiceRow();
-      document.getElementById('modalTitle').innerText = 'تۆماری داتا بۆ وەصلی نوێ';
+
+      renderRoomsTable();
+      renderServicesTable();
+
+      const t = translations[currentGlobalLang];
+      document.getElementById('modalTitle').innerText = t.modalTitleNew;
       document.getElementById('invoiceModal').classList.remove('hidden');
       document.getElementById('invoiceModal').classList.add('flex');
     }
@@ -646,39 +1439,45 @@
       document.getElementById('invoiceModal').classList.remove('flex');
     }
 
-    function openAddServiceModal() {
-      document.getElementById('newServiceForm').reset();
-      document.getElementById('addServiceModal').classList.remove('hidden');
-      document.getElementById('addServiceModal').classList.add('flex');
-    }
+    async function deleteCurrentModalInvoice() {
+      const editId = document.getElementById('editInvoiceId').value;
+      const invoiceNo = document.getElementById('en_invoice_info_NO').value.trim() || editId;
+      const guestName = document.getElementById('en_invoice_info_GuestsName').value.trim() || '-';
+      if (!editId) return;
 
-    function closeAddServiceModal() {
-      document.getElementById('addServiceModal').classList.add('hidden');
-      document.getElementById('addServiceModal').classList.remove('flex');
-    }
-
-    async function saveNewServiceMaster(e) {
-      e.preventDefault();
-      const payload = {
-        add_service_kurdi: document.getElementById('master_kurdi').value.trim(),
-        add_service_arabi: document.getElementById('master_arabi').value.trim(),
-        add_service_english: document.getElementById('master_english').value.trim()
-      };
-      const { error } = await supabaseClient.from('2_tbl_add_service').insert([payload]);
-      if (error) { alert('هەڵە: ' + error.message); return; }
-      alert('خزمەتگوزاری نوێ بە سەرکەوتوویی زیاد کرا!');
-      closeAddServiceModal();
-      await fetchServicesMaster();
-      refreshAllServiceDropdowns();
+      const confirmed = await showConfirmModal(`ئایا دڵنیایت لە سڕینەوەی وەصلی ژمارە (${invoiceNo}) بۆ بەڕێز (${guestName})؟`);
+      if (confirmed) {
+        showLoading("تکایە چاوەڕێ بە...");
+        try {
+          await Promise.all([
+            supabaseClient.from('2_tbl_en_invoice_room').delete().eq('invoice_id', editId),
+            supabaseClient.from('2_tbl_room_services').delete().eq('invoice_id', editId)
+          ]);
+          const { error } = await supabaseClient.from('2_tbl_en_invoice_info').delete().eq('en_invoice_info_ID', editId);
+          if (!error) {
+            showToast('وەصلەکە بە سەرکەوتوویی سڕایەوە!');
+            closeInvoiceModal();
+            await fetchInvoices();
+          }
+        } finally {
+          hideLoading();
+        }
+      }
     }
 
     async function saveInvoice(e) {
       e.preventDefault();
+
       const invoiceNo = document.getElementById('en_invoice_info_NO').value.trim();
       const guestName = document.getElementById('en_invoice_info_GuestsName').value.trim();
-      if (!invoiceNo || !guestName) { alert('تکایە خانە سەرەکییەکان پڕبکەرەوە!'); return; }
+
+      if (!invoiceNo || !guestName) {
+        alert('تکایە خانە سەرەکییەکان پڕبکەرەوە!');
+        return;
+      }
 
       const editId = document.getElementById('editInvoiceId').value;
+
       const invoiceData = {
         en_invoice_info_NO: invoiceNo,
         en_invoice_info_ArrivalDate: document.getElementById('en_invoice_info_ArrivalDate').value,
@@ -693,210 +1492,214 @@
       };
 
       let currentInvoiceId = null;
-      if (editId) {
-        const { error } = await supabaseClient.from('2_tbl_en_invoice_info').update(invoiceData).eq('en_invoice_info_ID', editId);
-        if (error) { alert('هەڵە: ' + error.message); return; }
-        currentInvoiceId = parseInt(editId);
-      } else {
-        const { data, error } = await supabaseClient.from('2_tbl_en_invoice_info').insert([invoiceData]).select();
-        if (error) { alert('هەڵە: ' + error.message); return; }
-        if (data && data.length > 0) currentInvoiceId = data[0].en_invoice_info_ID;
-      }
 
-      if (!currentInvoiceId) {
-        alert('هەڵە لە وەرگرتنی ئایدی وەصل!');
-        return;
-      }
-
-      // Rooms Saving with en_invoice_room_ID and en_invoice_info_TotalNaights mapping
-      await supabaseClient.from('2_tbl_en_invoice_room').delete().eq('en_invoice_room_ID', currentInvoiceId);
-      const roomsPayload = [];
-      document.querySelectorAll('#roomsContainer tr').forEach(row => {
-        const roomNum = row.querySelector('.room-number').value;
-        if (roomNum) {
-          roomsPayload.push({
-            en_invoice_room_ID: currentInvoiceId,
-            en_invoice_room_roomnumber: parseFloat(roomNum),
-            en_invoice_room_bookingcdde: parseFloat(row.querySelector('.room-booking-code').value) || 0,
-            en_invoice_room_nof_guests: parseFloat(row.querySelector('.room-guests').value) || 1,
-            en_invoice_room_price: parseFloat(row.querySelector('.room-price').value) || 0,
-            en_invoice_info_TotalNaights: numericNightsValue,
-            en_invoice_room_price_type: row.querySelector('.room-price-type').value
-          });
+      showLoading("چاوەڕێ بە، داتا خەزن دەکرێت...");
+      try {
+        if (editId) {
+          await supabaseClient.from('2_tbl_en_invoice_info').update(invoiceData).eq('en_invoice_info_ID', editId);
+          currentInvoiceId = parseInt(editId);
+        } else {
+          const { data } = await supabaseClient.from('2_tbl_en_invoice_info').insert([invoiceData]).select();
+          if (data && data.length > 0) {
+            currentInvoiceId = data[0].en_invoice_info_ID;
+            document.getElementById('editInvoiceId').value = currentInvoiceId;
+          }
         }
-      });
-      if (roomsPayload.length > 0) {
-        const { error: roomErr } = await supabaseClient.from('2_tbl_en_invoice_room').insert(roomsPayload);
-        if (roomErr) { alert('هەڵە لە پاشەکەوتکردنی ژوورەکان: ' + roomErr.message); return; }
-      }
 
-      // Services Saving with room_services_ID mapping
-      await supabaseClient.from('2_tbl_room_services').delete().eq('room_services_ID', currentInvoiceId);
-      const servicesPayload = [];
-      document.querySelectorAll('#servicesContainer tr').forEach(row => {
-        const sType = row.querySelector('.serv-type').value.trim();
-        if (sType) {
-          servicesPayload.push({
-            room_services_ID: currentInvoiceId,
-            service_type: row.querySelector('.serv-type-kurdi').value || sType,
-            service_type_arabi: row.querySelector('.serv-type-arabi').value || '',
-            service_type_english: row.querySelector('.serv-type-english').value || '',
-            service_qty: parseFloat(row.querySelector('.serv-qty').value) || 1,
-            service_price: parseFloat(row.querySelector('.serv-price').value) || 0,
-            service_total: parseFloat(row.querySelector('.serv-price').value || 0) * (parseFloat(row.querySelector('.serv-qty').value) || 1),
-            service_price_type: row.querySelector('.serv-price-type').value,
-            service_date: document.getElementById('en_invoice_info_ArrivalDate').value
-          });
-        }
-      });
-      if (servicesPayload.length > 0) {
-        const { error: servErr } = await supabaseClient.from('2_tbl_room_services').insert(servicesPayload);
-        if (servErr) { alert('هەڵە لە پاشەکەوتکردنی خزمەتگوزارییەکان: ' + servErr.message); return; }
-      }
+        showToast('زانیارییە سەرەکییەکان خەزن کران!');
+        document.getElementById('modalPrintBtn').classList.remove('hidden');
+        document.getElementById('modalDeleteBtn').classList.remove('hidden');
+        await fetchInvoices();
 
-      alert('بە سەرکەوتوویی پاشەکەوت کرا!');
-      closeInvoiceModal();
-      fetchInvoices();
+      } finally {
+        hideLoading();
+      }
     }
 
     async function editInvoice(id) {
-      const item = invoicesList.find(x => x.en_invoice_info_ID == id);
-      if (!item) return;
+      showLoading("تکایە چاوەڕێ بە...");
+      try {
+        const item = invoicesList.find(x => x.en_invoice_info_ID == id);
+        if (!item) return;
 
-      openInvoiceModal();
-      const guestN = item.en_invoice_info_GuestsName || '';
-      const compN = item.en_invoice_info_Company_travelagent ? `به‌ڕێز ${guestN} - ${item.en_invoice_info_Company_travelagent}` : `به‌ڕێز ${guestN}`;
-      document.getElementById('modalTitle').innerText = `دەستکاریکردنی وەصلی ژمارە: ${item.en_invoice_info_NO || id}  |  ${compN}`;
-      
-      document.getElementById('editInvoiceId').value = item.en_invoice_info_ID;
-      document.getElementById('en_invoice_info_NO').value = item.en_invoice_info_NO || '';
-      document.getElementById('en_invoice_info_GuestsName').value = guestN;
-      document.getElementById('en_invoice_info_Company_travelagent').value = item.en_invoice_info_Company_travelagent || '';
-      document.getElementById('en_invoice_info_ArrivalDate').value = item.en_invoice_info_ArrivalDate || '';
-      document.getElementById('en_invoice_info_DepartureDate').value = item.en_invoice_info_DepartureDate || '';
-      
-      numericNightsValue = item.en_invoice_info_TotalNaights || 1;
-      document.getElementById('en_invoice_info_TotalNaights').value = `${numericNightsValue} شەو`;
-      
-      document.getElementById('en_invoice_info_Email').value = item.en_invoice_info_Email || '';
-      document.getElementById('en_invoice_info_Document').value = item.en_invoice_info_Document || '';
-      document.getElementById('en_invoice_info_DocumentNO').value = item.en_invoice_info_DocumentNO || '';
-      document.getElementById('en_invoice_info_reception').value = item.en_invoice_info_reception || 'Jilla Hotel Administration';
+        openInvoiceModal();
+        const invoiceNo = item.en_invoice_info_NO || id;
+        const guestName = item.en_invoice_info_GuestsName || '-';
+        document.getElementById('modalTitle').innerText = `دەستکاری کردنی وەصلی ڕەقەم : ${invoiceNo} - بەڕێز: ${guestName}`;
+        document.getElementById('editInvoiceId').value = item.en_invoice_info_ID;
+        document.getElementById('modalPrintBtn').classList.remove('hidden');
+        document.getElementById('modalDeleteBtn').classList.remove('hidden');
 
-      // Load Rooms tied to this en_invoice_room_ID
-      document.getElementById('roomsContainer').innerHTML = '';
-      const { data: rooms } = await supabaseClient.from('2_tbl_en_invoice_room').select('*').eq('en_invoice_room_ID', id);
-      if (rooms && rooms.length > 0) {
-        rooms.forEach(room => addRoomRow(room));
-      } else {
-        addRoomRow();
-      }
+        document.getElementById('en_invoice_info_NO').value = item.en_invoice_info_NO || '';
+        document.getElementById('en_invoice_info_GuestsName').value = item.en_invoice_info_GuestsName || '';
+        document.getElementById('en_invoice_info_Company_travelagent').value = item.en_invoice_info_Company_travelagent || '';
+        
+        document.getElementById('en_invoice_info_ArrivalDate').value = item.en_invoice_info_ArrivalDate || '';
+        document.getElementById('en_invoice_info_DepartureDate').value = item.en_invoice_info_DepartureDate || '';
+        
+        numericNightsValue = item.en_invoice_info_TotalNaights || 1;
+        const nightsTxt = currentGlobalLang === 'en' ? `${numericNightsValue} Nights` : (currentGlobalLang === 'ar' ? `${numericNightsValue} ليلة` : `${numericNightsValue} شەو`);
+        document.getElementById('en_invoice_info_TotalNaights').value = nightsTxt;
+        
+        document.getElementById('en_invoice_info_Email').value = item.en_invoice_info_Email || '';
+        document.getElementById('en_invoice_info_Document').value = item.en_invoice_info_Document || '';
+        document.getElementById('en_invoice_info_DocumentNO').value = item.en_invoice_info_DocumentNO || '';
+        document.getElementById('en_invoice_info_reception').value = item.en_invoice_info_reception || 'Jilla Hotel Administration';
 
-      // Load Services tied to this room_services_ID
-      document.getElementById('servicesContainer').innerHTML = '';
-      const { data: services } = await supabaseClient.from('2_tbl_room_services').select('*').eq('room_services_ID', id);
-      if (services && services.length > 0) {
-        services.forEach(serv => addServiceRow(serv));
-      } else {
-        addServiceRow();
-      }
-    }
+        const [roomsRes, servicesRes] = await Promise.all([
+          supabaseClient.from('2_tbl_en_invoice_room').select('*').eq('invoice_id', id),
+          supabaseClient.from('2_tbl_room_services').select('*').eq('invoice_id', id)
+        ]);
 
-    async function deleteInvoice(id, no) {
-      if (confirm(`ئایا دڵنیایت لە سڕینەوەی وەصلی ژمارە (${no})؟`)) {
-        await supabaseClient.from('2_tbl_en_invoice_room').delete().eq('en_invoice_room_ID', id);
-        await supabaseClient.from('2_tbl_room_services').delete().eq('room_services_ID', id);
-        const { error } = await supabaseClient.from('2_tbl_en_invoice_info').delete().eq('en_invoice_info_ID', id);
-        if (!error) fetchInvoices(); else alert('هەڵە: ' + error.message);
+        roomsDataList = roomsRes.data || [];
+        renderRoomsTable();
+
+        servicesDataList = servicesRes.data || [];
+        renderServicesTable();
+      } finally {
+        hideLoading();
       }
     }
 
-    /* PRINT INVOICE REPORT LOGIC */
-    async function printInvoice(id) {
+    async function deleteInvoice(id, no, name) {
+      const confirmed = await showConfirmModal(`ئایا دڵنیایت لە سڕینەوەی وەصلی ژمارە (${no}) بۆ بەڕێز (${name})؟`);
+      if (confirmed) {
+        showLoading("تکایە چاوەڕێ بە...");
+        try {
+          await Promise.all([
+            supabaseClient.from('2_tbl_en_invoice_room').delete().eq('invoice_id', id),
+            supabaseClient.from('2_tbl_room_services').delete().eq('invoice_id', id)
+          ]);
+          await supabaseClient.from('2_tbl_en_invoice_info').delete().eq('en_invoice_info_ID', id);
+          showToast('وەصلەکە سڕایەوە!');
+          await fetchInvoices();
+        } finally {
+          hideLoading();
+        }
+      }
+    }
+
+    function printCurrentModalInvoice() {
+      const editId = document.getElementById('editInvoiceId').value;
+      if (editId) {
+        openPrintModal(parseInt(editId));
+      } else {
+        alert('تکایە سەرەتا وەصلەکە خەزن بکە پاشان پرێنت بکە!');
+      }
+    }
+
+    async function openPrintModal(id) {
       const item = invoicesList.find(x => x.en_invoice_info_ID == id);
       if (!item) return;
+
+      document.getElementById('p_receptionSign').innerText = item.en_invoice_info_reception || "hussein k. namiq";
+      document.getElementById('p_guestSign').innerText = item.en_invoice_info_GuestsName || '-';
 
       document.getElementById('p_invoiceNo').innerText = item.en_invoice_info_NO || '-';
-      document.getElementById('p_date').innerText = new Date().toISOString().split('T')[0];
       document.getElementById('p_guestName').innerText = item.en_invoice_info_GuestsName || '-';
-      document.getElementById('p_company').innerText = item.en_invoice_info_Company_travelagent || 'نادیار';
-      document.getElementById('p_arrival').innerText = item.en_invoice_info_ArrivalDate || '-';
-      document.getElementById('p_departure').innerText = item.en_invoice_info_DepartureDate || '-';
-      document.getElementById('p_nights').innerText = (item.en_invoice_info_TotalNaights || 1) + ' شەو';
+      document.getElementById('p_company').innerText = item.en_invoice_info_Company_travelagent || '-';
+      
+      document.getElementById('p_arrival').innerText = formatDateWithDayName(item.en_invoice_info_ArrivalDate);
+      document.getElementById('p_departure').innerText = formatDateWithDayName(item.en_invoice_info_DepartureDate);
+      
+      const nights = item.en_invoice_info_TotalNaights || 1;
+      document.getElementById('p_totalNights').innerText = nights;
       document.getElementById('p_email').innerText = item.en_invoice_info_Email || '-';
-      document.getElementById('p_reception').innerText = item.en_invoice_info_reception || 'Jilla Hotel Administration';
+      document.getElementById('p_document').innerText = item.en_invoice_info_Document || '-';
+      document.getElementById('p_documentNo').innerText = item.en_invoice_info_DocumentNO || '-';
 
-      // Fetch Rooms
-      const { data: rooms } = await supabaseClient.from('2_tbl_en_invoice_room').select('*').eq('en_invoice_room_ID', id);
-      const roomsBody = document.getElementById('p_roomsBody');
-      roomsBody.innerHTML = '';
-      let roomsTotalUSD = 0;
-      let roomsTotalIQD = 0;
+      showLoading("تکایە چاوەڕێ بە...");
+      try {
+        const [roomsRes, servicesRes] = await Promise.all([
+          supabaseClient.from('2_tbl_en_invoice_room').select('*').eq('invoice_id', id),
+          supabaseClient.from('2_tbl_room_services').select('*').eq('invoice_id', id)
+        ]);
 
-      if (rooms && rooms.length > 0) {
-        rooms.forEach((r, idx) => {
-          const nights = item.en_invoice_info_TotalNaights || 1;
-          const lineTotal = (r.en_invoice_room_price || 0) * nights;
-          const curr = r.en_invoice_room_price_type || 'دۆلار';
-          if (curr === 'دینار') roomsTotalIQD += lineTotal; else roomsTotalUSD += lineTotal;
+        const rooms = roomsRes.data || [];
+        const services = servicesRes.data || [];
 
-          roomsBody.innerHTML += `
-            <tr class="border-b border-black text-center">
-              <td class="p-1 border border-black">${idx + 1}</td>
-              <td class="p-1 border border-black font-bold">${r.en_invoice_room_roomnumber || '-'}</td>
-              <td class="p-1 border border-black">${r.en_invoice_room_bookingcdde || '-'}</td>
-              <td class="p-1 border border-black">${r.en_invoice_room_nof_guests || 1}</td>
-              <td class="p-1 border border-black font-mono">${formatNumber(r.en_invoice_room_price || 0)}</td>
-              <td class="p-1 border border-black font-mono font-bold">${formatNumber(lineTotal)} ${curr}</td>
-            </tr>
-          `;
-        });
-      } else {
-        roomsBody.innerHTML = `<tr><td colspan="6" class="text-center p-1 border border-black">هیچ ژوورێک نییە</td></tr>`;
+        let roomsSumUSD = 0;
+        let roomsSumIQD = 0;
+
+        const printRoomsBody = document.getElementById('printRoomsBody');
+        if (rooms.length === 0) {
+          printRoomsBody.innerHTML = `<tr><td colspan="7" style="border: 1px solid #fed7aa; padding: 6px; text-align: center; color: #9a3412;">-</td></tr>`;
+          document.getElementById('printRoomsFooter').innerText = `کۆی گشتی بریتییە لە 0 ژوور دەکاتە بڕی 0`;
+        } else {
+          printRoomsBody.innerHTML = rooms.map((r, idx) => {
+            const roomTotal = (r.en_invoice_room_price || 0) * nights;
+            if (r.en_invoice_room_price_type === 'دیناری عێراقی') roomsSumIQD += roomTotal;
+            else roomsSumUSD += roomTotal;
+
+            return `
+              <tr style="border-bottom: 1px solid #fed7aa; background: ${idx % 2 === 0 ? '#fff7ed' : '#ffffff'}; color: #000000;">
+                <td style="border: 1px solid #fed7aa; padding: 5px 6px; text-align: center; font-weight: 700; color: #000000;">0${idx + 1}</td>
+                <td style="border: 1px solid #fed7aa; padding: 5px 6px; font-weight: 900; font-family: monospace; color: #000000;">${r.en_invoice_room_roomnumber || '-'}</td>
+                <td style="border: 1px solid #fed7aa; padding: 5px 6px; font-family: monospace; font-weight: 700; color: #000000;">${r.en_invoice_room_bookingcdde || '-'}</td>
+                <td style="border: 1px solid #fed7aa; padding: 5px 6px; text-align: center; font-family: monospace; font-weight: 700; color: #000000;">${r.en_invoice_room_nof_guests || 1}</td>
+                <td style="border: 1px solid #fed7aa; padding: 5px 6px; font-family: monospace; font-weight: 700; color: #000000;">${formatNumber(r.en_invoice_room_price || 0)}</td>
+                <td style="border: 1px solid #fed7aa; padding: 5px 6px; text-align: center; font-family: monospace; font-weight: 700; color: #000000;">${nights}</td>
+                <td style="border: 1px solid #fed7aa; padding: 5px 6px; font-weight: 900; font-family: monospace; color: #000000;">${formatNumber(roomTotal)} ${r.en_invoice_room_price_type === 'دیناری عێراقی' ? 'دیناری عێراقی' : 'دۆلار'}</td>
+              </tr>
+            `;
+          }).join('');
+
+          let roomsTotalTxt = [];
+          if (roomsSumUSD > 0) roomsTotalTxt.push(`${formatNumber(roomsSumUSD)} دۆلار`);
+          if (roomsSumIQD > 0) roomsTotalTxt.push(`${formatNumber(roomsSumIQD)} دیناری عێراقی`);
+          
+          document.getElementById('printRoomsFooter').innerText = `کۆی گشتی بریتییە لە ${rooms.length} ژوور دەکاتە بڕی ${roomsTotalTxt.join(' + ')}`;
+        }
+
+        const printServicesBody = document.getElementById('printServicesBody');
+        let servSumUSD = 0;
+        let servSumIQD = 0;
+
+        if (services.length === 0) {
+          printServicesBody.innerHTML = `<tr><td colspan="5" style="border: 1px solid #fed7aa; padding: 6px; text-align: center; color: #9a3412;">-</td></tr>`;
+          document.getElementById('printServicesFooter').innerText = `کۆی گشتی خزمەتگوزاری دەکاتە بڕی 0`;
+        } else {
+          printServicesBody.innerHTML = services.map((s, idx) => {
+            const servTotal = s.service_total || ((s.service_price || 0) * (s.service_qty || 1));
+            if (s.service_price_type === 'دیناری عێراقی') servSumIQD += servTotal;
+            else servSumUSD += servTotal;
+
+            return `
+              <tr style="border-bottom: 1px solid #fed7aa; background: ${idx % 2 === 0 ? '#fff7ed' : '#ffffff'}; color: #000000;">
+                <td style="border: 1px solid #fed7aa; padding: 5px 6px; text-align: center; font-weight: 700; color: #000000;">0${idx + 1}</td>
+                <td style="border: 1px solid #fed7aa; padding: 5px 6px; font-weight: 900; color: #000000;">${s.service_type || '-'}</td>
+                <td style="border: 1px solid #fed7aa; padding: 5px 6px; text-align: center; font-family: monospace; font-weight: 700; color: #000000;">${s.service_qty || 1}</td>
+                <td style="border: 1px solid #fed7aa; padding: 5px 6px; font-family: monospace; font-weight: 700; color: #000000;">${formatNumber(s.service_price || 0)} ${s.service_price_type === 'دیناری عێراقی' ? 'دیناری عێراقی' : 'دۆلار'}</td>
+                <td style="border: 1px solid #fed7aa; padding: 5px 6px; font-weight: 900; font-family: monospace; color: #000000;">${formatNumber(servTotal)} ${s.service_price_type === 'دیناری عێراقی' ? 'دیناری عێراقی' : 'دۆلار'}</td>
+              </tr>
+            `;
+          }).join('');
+
+          let servTotalTxt = [];
+          if (servSumUSD > 0) servTotalTxt.push(`${formatNumber(servSumUSD)} دۆلار`);
+          if (servSumIQD > 0) servTotalTxt.push(`${formatNumber(servSumIQD)} دیناری عێراقی`);
+
+          document.getElementById('printServicesFooter').innerText = `کۆی گشتی خزمەتگوزاری دەکاتە بڕی ${servTotalTxt.join(' + ')}`;
+        }
+
+        let totalText = [];
+        let grandUSD = roomsSumUSD + servSumUSD;
+        let grandIQD = roomsSumIQD + servSumIQD;
+        if (grandUSD > 0) totalText.push(`${formatNumber(grandUSD)} دۆلار`);
+        if (grandIQD > 0) totalText.push(`${formatNumber(grandIQD)} دیناری عێراقی`);
+        
+        document.getElementById('p_grandTotal').innerText = totalText.length > 0 ? totalText.join(' + ') : '0';
+        
+        let wordsParts = [];
+        if (grandIQD > 0) wordsParts.push(`${numberToKurdishWords(grandIQD)} دیناری عێراقی`);
+        if (grandUSD > 0) wordsParts.push(`${numberToKurdishWords(grandUSD)} دۆلار`);
+        document.getElementById('p_grandTotalWords').innerText = wordsParts.length > 0 ? `(${wordsParts.join(' و ')})` : '(صفر)';
+
+        document.getElementById('printModal').classList.remove('hidden');
+        document.getElementById('printModal').classList.add('flex');
+      } finally {
+        hideLoading();
       }
-
-      // Fetch Services
-      const { data: services } = await supabaseClient.from('2_tbl_room_services').select('*').eq('room_services_ID', id);
-      const servicesBody = document.getElementById('p_servicesBody');
-      servicesBody.innerHTML = '';
-      let servTotalUSD = 0;
-      let servTotalIQD = 0;
-
-      if (services && services.length > 0) {
-        services.forEach((s, idx) => {
-          const lineTotal = s.service_total || ((s.service_price || 0) * (s.service_qty || 1));
-          const curr = s.service_price_type || 'دۆلار';
-          if (curr === 'دینار') servTotalIQD += lineTotal; else servTotalUSD += lineTotal;
-
-          const kurdiName = s.service_type || '';
-          const arabiName = s.service_type_arabi ? ` / ${s.service_type_arabi}` : '';
-          const englishName = s.service_type_english ? ` / ${s.service_type_english}` : '';
-          const fullServiceName = kurdiName + arabiName + englishName;
-
-          servicesBody.innerHTML += `
-            <tr class="border-b border-black text-center">
-              <td class="p-1 border border-black">${idx + 1}</td>
-              <td class="p-1 border border-black text-right font-bold">${fullServiceName}</td>
-              <td class="p-1 border border-black">${s.service_qty || 1}</td>
-              <td class="p-1 border border-black font-mono">${formatNumber(s.service_price || 0)}</td>
-              <td class="p-1 border border-black font-mono font-bold">${formatNumber(lineTotal)} ${curr}</td>
-            </tr>
-          `;
-        });
-      } else {
-        servicesBody.innerHTML = `<tr><td colspan="5" class="text-center p-1 border border-black">هیچ خزمەتگوزارییەک نییە</td></tr>`;
-      }
-
-      // Grand Total
-      let grandText = [];
-      const totalUSD = roomsTotalUSD + servTotalUSD;
-      const totalIQD = roomsTotalIQD + servTotalIQD;
-      if (totalUSD > 0) grandText.push(`${formatNumber(totalUSD)} $`);
-      if (totalIQD > 0) grandText.push(`${formatNumber(totalIQD)} دینار`);
-      document.getElementById('p_grandTotal').innerText = grandText.length > 0 ? grandText.join(' + ') : '0';
-
-      document.getElementById('printModal').classList.remove('hidden');
-      document.getElementById('printModal').classList.add('flex');
     }
 
     function closePrintModal() {
@@ -904,16 +1707,8 @@
       document.getElementById('printModal').classList.remove('flex');
     }
 
-    function downloadPDF() {
-      const element = document.getElementById('printArea');
-      const opt = {
-        margin:       5,
-        filename:     'Jilla-Invoice-Report.pdf',
-        image:        { type: 'jpeg', quality: 0.98 },
-        html2canvas:  { scale: 2, useCORS: true },
-        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
-      };
-      html2pdf().set(opt).from(element).save();
+    function triggerActualPrint() {
+      window.print();
     }
   </script>
 </body>
